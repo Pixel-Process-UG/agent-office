@@ -6,6 +6,7 @@ import type { AgentRuntimeStatus } from './office-state'
 export interface OfficeAgent extends AgentCard {
   effectivePresence: PresenceState
   characterId: string
+  systemPrompt?: string
 }
 
 export interface AgentCreateInput {

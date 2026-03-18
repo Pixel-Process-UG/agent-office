@@ -74,7 +74,10 @@ describe('office-state types', () => {
       assignments: [],
       activityFeed: [],
       decisions: [],
+      messages: [],
+      webhooks: [],
+      webhookLogs: [],
     }
-    expect(Object.keys(snapshot)).toHaveLength(7)
+    expect(Object.keys(snapshot)).toHaveLength(10)
   })
 })

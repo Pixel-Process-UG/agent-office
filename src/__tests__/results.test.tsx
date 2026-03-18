@@ -97,7 +97,7 @@ describe('Complete button visibility', () => {
     renderApp()
 
     // Switch to Tasks tab
-    const tasksTab = await screen.findByRole('tab', { name: /all tasks/i })
+    const tasksTab = await screen.findByRole('tab', { name: /^tasks/i })
     fireEvent.click(tasksTab)
 
     const completeBtn = await screen.findByText('Complete')
@@ -115,7 +115,7 @@ describe('Complete button visibility', () => {
     mockFetch(snapshot)
     renderApp()
 
-    const tasksTab = await screen.findByRole('tab', { name: /all tasks/i })
+    const tasksTab = await screen.findByRole('tab', { name: /^tasks/i })
     fireEvent.click(tasksTab)
 
     await screen.findByText('Queued task')
@@ -138,7 +138,7 @@ describe('Task result display', () => {
     mockFetch(snapshot)
     renderApp()
 
-    const tasksTab = await screen.findByRole('tab', { name: /all tasks/i })
+    const tasksTab = await screen.findByRole('tab', { name: /^tasks/i })
     fireEvent.click(tasksTab)
 
     const resultText = await screen.findByText('Here is the final output')
@@ -158,7 +158,7 @@ describe('Task result display', () => {
     mockFetch(snapshot)
     renderApp()
 
-    const tasksTab = await screen.findByRole('tab', { name: /all tasks/i })
+    const tasksTab = await screen.findByRole('tab', { name: /^tasks/i })
     fireEvent.click(tasksTab)
 
     const saveBtn = await screen.findByText('Save locally')
@@ -180,7 +180,7 @@ describe('Task result display', () => {
     mockFetch(snapshot)
     renderApp()
 
-    const tasksTab = await screen.findByRole('tab', { name: /all tasks/i })
+    const tasksTab = await screen.findByRole('tab', { name: /^tasks/i })
     fireEvent.click(tasksTab)
 
     await screen.findByText('Dismissed task')

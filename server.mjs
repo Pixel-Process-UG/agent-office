@@ -9,6 +9,7 @@
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { registerAgent, unregisterAgent, dispatchTask, getAllAgentStatuses, startTaskQueue, shutdownAll } from './agent-runtime.mjs'
@@ -28,9 +29,13 @@ const MAX_FOCUS_LEN = 500
 const MAX_NAME_LEN = 100
 const MAX_ROLE_LEN = 200
 const VALID_PRESENCE = ['off_hours', 'available', 'active', 'in_meeting', 'paused', 'blocked']
-const AGENT_PATCH_FIELDS = ['presence', 'focus', 'roomId', 'criticalTask', 'collaborationMode']
+const AGENT_PATCH_FIELDS = ['presence', 'focus', 'roomId', 'criticalTask', 'collaborationMode', 'xPct', 'yPct', 'systemPrompt']
 const AGENT_ID_RE = /^[a-z0-9-]+$/
 const ASSIGNMENT_STATUSES = ['queued', 'routed', 'active', 'done', 'blocked']
+const MAX_SYSTEM_PROMPT_LEN = 5000
+const MAX_MESSAGE_LEN = 2000
+const VALID_DECISION_STATUSES = ['proposed', 'accepted', 'rejected']
+const WEBHOOK_EVENTS = ['agent.presence_changed', 'task.completed', 'task.failed', 'agent.created', 'agent.deleted', 'decision.created']
 
 const ALLOWED_ROOTS = [DIST, path.join(__dirname, 'assets')]
 
@@ -67,7 +72,15 @@ function readBody(req) {
 function sanitizePatch(raw) {
   const clean = {}
   for (const key of AGENT_PATCH_FIELDS) {
-    if (key in raw) clean[key] = raw[key]
+    if (key in raw) {
+      if ((key === 'xPct' || key === 'yPct') && typeof raw[key] === 'number') {
+        clean[key] = Math.max(0, Math.min(100, raw[key]))
+      } else if (key === 'systemPrompt' && typeof raw[key] === 'string') {
+        clean[key] = raw[key].slice(0, MAX_SYSTEM_PROMPT_LEN)
+      } else {
+        clean[key] = raw[key]
+      }
+    }
   }
   return clean
 }
@@ -107,6 +120,55 @@ function json(res, status, data) {
 
 function readState() { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8')) }
 function writeState(state) { fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2)) }
+
+function dispatchWebhooks(event, payload) {
+  try {
+    const state = readState()
+    const webhooks = state.webhooks || []
+    for (const wh of webhooks) {
+      if (!wh.enabled) continue
+      if (wh.events.length > 0 && !wh.events.includes(event)) continue
+      const body = JSON.stringify({ event, payload, timestamp: new Date().toISOString() })
+      const headers = { 'Content-Type': 'application/json' }
+      if (wh.secret) {
+        headers['X-Webhook-Signature'] = crypto.createHmac('sha256', wh.secret).update(body).digest('hex')
+      }
+      fetch(wh.url, { method: 'POST', headers, body, signal: AbortSignal.timeout(10000) })
+        .then(res => {
+          withLock(() => {
+            const s = readState()
+            if (!s.webhookLogs) s.webhookLogs = []
+            s.webhookLogs.unshift({ id: `whl-${Date.now()}`, webhookId: wh.id, event, statusCode: res.status, deliveredAt: new Date().toISOString() })
+            s.webhookLogs = s.webhookLogs.slice(0, 20)
+            writeState(s)
+          })
+        })
+        .catch(() => {
+          setTimeout(() => {
+            fetch(wh.url, { method: 'POST', headers, body, signal: AbortSignal.timeout(10000) })
+              .then(res => {
+                withLock(() => {
+                  const s = readState()
+                  if (!s.webhookLogs) s.webhookLogs = []
+                  s.webhookLogs.unshift({ id: `whl-${Date.now()}`, webhookId: wh.id, event, statusCode: res.status, deliveredAt: new Date().toISOString() })
+                  s.webhookLogs = s.webhookLogs.slice(0, 20)
+                  writeState(s)
+                })
+              })
+              .catch(() => {
+                withLock(() => {
+                  const s = readState()
+                  if (!s.webhookLogs) s.webhookLogs = []
+                  s.webhookLogs.unshift({ id: `whl-${Date.now()}`, webhookId: wh.id, event, statusCode: 0, deliveredAt: new Date().toISOString() })
+                  s.webhookLogs = s.webhookLogs.slice(0, 20)
+                  writeState(s)
+                })
+              })
+          }, 5000)
+        })
+    }
+  } catch { /* no webhooks configured */ }
+}
 
 let writeLock = Promise.resolve()
 function withLock(fn) {
@@ -208,9 +270,43 @@ decisions_json as (
     'id', id,
     'title', title,
     'detail', detail,
+    'status', coalesce(status, 'proposed'),
+    'proposedBy', proposed_by,
     'createdAt', created_at
   ) order by created_at desc), '[]'::json) as value
   from office_decisions
+),
+messages_json as (
+  select coalesce(json_agg(json_build_object(
+    'id', id,
+    'fromAgentId', from_agent_id,
+    'toAgentId', to_agent_id,
+    'roomId', room_id,
+    'message', message,
+    'createdAt', created_at
+  ) order by created_at desc), '[]'::json) as value
+  from office_messages
+),
+webhooks_json as (
+  select coalesce(json_agg(json_build_object(
+    'id', id,
+    'url', url,
+    'secret', secret,
+    'events', events,
+    'enabled', enabled,
+    'createdAt', created_at
+  ) order by created_at desc), '[]'::json) as value
+  from office_webhooks
+),
+webhook_logs_json as (
+  select coalesce(json_agg(json_build_object(
+    'id', id,
+    'webhookId', webhook_id,
+    'event', event,
+    'statusCode', status_code,
+    'deliveredAt', delivered_at
+  ) order by delivered_at desc), '[]'::json) as value
+  from office_webhook_logs
 )
 select json_build_object(
   'agents', agents_json.value,
@@ -226,10 +322,13 @@ select json_build_object(
   'activity', activity_json.value,
   'assignments', assignments_json.value,
   'decisions', decisions_json.value,
+  'messages', messages_json.value,
+  'webhooks', webhooks_json.value,
+  'webhookLogs', webhook_logs_json.value,
   'source', 'postgres',
   'lastUpdatedAt', now()
 )
-from agents_json, rooms_json, seats_json, assignments_json, activity_json, decisions_json;
+from agents_json, rooms_json, seats_json, assignments_json, activity_json, decisions_json, messages_json, webhooks_json, webhook_logs_json;
 `
   const raw = await runPsql(sql)
   return JSON.parse(raw)
@@ -255,6 +354,15 @@ async function patchAgentInPostgres(agentId, patch) {
   }
   if (typeof patch.roomId === 'string') {
     worldUpdates.push(`room_id = ${sqlString(patch.roomId)}`)
+  }
+  if (typeof patch.xPct === 'number') {
+    worldUpdates.push(`anchor_x_pct = ${patch.xPct}`)
+  }
+  if (typeof patch.yPct === 'number') {
+    worldUpdates.push(`anchor_y_pct = ${patch.yPct}`)
+  }
+  if (typeof patch.systemPrompt === 'string') {
+    updates.push(`system_prompt = ${sqlString(patch.systemPrompt)}`)
   }
 
   if (updates.length) {
@@ -437,6 +545,10 @@ const server = http.createServer(async (req, res) => {
       }
       if (!state.assignments) state.assignments = []
       if (!state.activity) state.activity = []
+      if (!state.decisions) state.decisions = []
+      if (!state.messages) state.messages = []
+      if (!state.webhooks) state.webhooks = []
+      if (!state.webhookLogs) state.webhookLogs = []
       state.agentRuntimeStatuses = getAllAgentStatuses()
       json(res, 200, state)
     } catch {
@@ -444,6 +556,10 @@ const server = http.createServer(async (req, res) => {
         const state = readState()
         if (!state.assignments) state.assignments = []
         if (!state.activity) state.activity = []
+        if (!state.decisions) state.decisions = []
+        if (!state.messages) state.messages = []
+        if (!state.webhooks) state.webhooks = []
+        if (!state.webhookLogs) state.webhookLogs = []
         state.agentRuntimeStatuses = getAllAgentStatuses()
         json(res, 200, state)
       } catch { json(res, 500, { error: 'Office state unavailable' }) }
@@ -698,11 +814,13 @@ const server = http.createServer(async (req, res) => {
         if (parseInt(exists) > 0) {
           json(res, 409, { error: 'Agent with this id already exists' }); return
         }
-        await runPsql(`insert into office_agents (id, name, role, team, internal_staff, office_visible) values (${sqlString(input.id)}, ${sqlString(input.name)}, ${sqlString(input.role)}, ${sqlString(input.team)}, true, true);`)
+        const sysPrompt = input.systemPrompt ? String(input.systemPrompt).slice(0, MAX_SYSTEM_PROMPT_LEN) : ''
+        await runPsql(`insert into office_agents (id, name, role, team, internal_staff, office_visible, system_prompt) values (${sqlString(input.id)}, ${sqlString(input.name)}, ${sqlString(input.role)}, ${sqlString(input.team)}, true, true, ${sqlString(sysPrompt)});`)
         await runPsql(`insert into office_presence (agent_id, presence_state, effective_presence_state, critical_task, focus, collaboration_mode) values (${sqlString(input.id)}, ${sqlString(input.presence || 'available')}, ${sqlString(input.presence || 'available')}, ${sqlBool(input.criticalTask || false)}, ${sqlString(input.focus || '')}, ${sqlString(input.collaborationMode || '')});`)
         await runPsql(`insert into office_world_entities (agent_id, room_id, anchor_x_pct, anchor_y_pct) values (${sqlString(input.id)}, ${sqlString(input.roomId)}, 50, 50);`)
         await appendActivityInPostgres({ id: `act-${Date.now()}`, kind: 'system', text: `Agent ${input.name} created`, agentId: input.id })
-        registerAgent(input.id, input.name, input.role)
+        registerAgent(input.id, input.name, input.role, sysPrompt)
+        dispatchWebhooks('agent.created', { agentId: input.id, name: input.name })
         json(res, 201, { ok: true, id: input.id, source: 'postgres' })
       } else {
         await withLock(() => {
@@ -714,13 +832,15 @@ const server = http.createServer(async (req, res) => {
             id: input.id, name: input.name, role: input.role, team: input.team,
             roomId: input.roomId, presence: input.presence || 'available',
             focus: input.focus || '', criticalTask: input.criticalTask || false,
-            collaborationMode: input.collaborationMode || ''
+            collaborationMode: input.collaborationMode || '',
+            systemPrompt: input.systemPrompt ? String(input.systemPrompt).slice(0, MAX_SYSTEM_PROMPT_LEN) : ''
           })
           if (!state.agentSeats) state.agentSeats = {}
           state.agentSeats[input.id] = { xPct: 50, yPct: 50 }
           state.lastUpdatedAt = new Date().toISOString()
           writeState(state)
-          registerAgent(input.id, input.name, input.role)
+          registerAgent(input.id, input.name, input.role, input.systemPrompt || '')
+          dispatchWebhooks('agent.created', { agentId: input.id, name: input.name })
           json(res, 201, { ok: true, id: input.id, source: 'file' })
         })
       }
@@ -806,6 +926,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const agentId = agentMatch[1]
       unregisterAgent(agentId)
+      dispatchWebhooks('agent.deleted', { agentId })
       if (await postgresAvailable()) {
         const exists = await runPsql(`select count(*) from office_agents where id = ${sqlString(agentId)};`)
         if (parseInt(exists) === 0) {
@@ -906,6 +1027,310 @@ const server = http.createServer(async (req, res) => {
     return
   }
 
+  // POST /api/office/decision — create a decision
+  if (url.pathname === '/api/office/decision' && req.method === 'POST') {
+    try {
+      const input = await readBody(req)
+      if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+        json(res, 400, { error: 'Invalid body' }); return
+      }
+      if (!input.title || !input.detail) {
+        json(res, 400, { error: 'title and detail required' }); return
+      }
+      const decision = {
+        id: `decision-${Date.now()}`,
+        title: String(input.title).slice(0, MAX_TITLE_LEN),
+        detail: String(input.detail).slice(0, MAX_BRIEF_LEN),
+        status: 'proposed',
+        proposedBy: input.proposedBy ? String(input.proposedBy) : null,
+        createdAt: new Date().toISOString()
+      }
+      if (await postgresAvailable()) {
+        await runPsql(`insert into office_decisions (id, title, detail, status, proposed_by) values (${sqlString(decision.id)}, ${sqlString(decision.title)}, ${sqlString(decision.detail)}, 'proposed', ${sqlString(decision.proposedBy)});`)
+        await appendActivityInPostgres({ id: `act-${Date.now()}`, kind: 'decision', text: `Decision proposed: "${decision.title}"` })
+        dispatchWebhooks('decision.created', { decision })
+        json(res, 201, { ok: true, decision, source: 'postgres' })
+      } else {
+        await withLock(() => {
+          const state = readState()
+          if (!state.decisions) state.decisions = []
+          state.decisions.unshift(decision)
+          if (!state.activity) state.activity = []
+          state.activity.unshift({ id: `act-${Date.now()}`, kind: 'decision', text: `Decision proposed: "${decision.title}"`, createdAt: new Date().toISOString() })
+          state.activity = state.activity.slice(0, 100)
+          state.lastUpdatedAt = new Date().toISOString()
+          writeState(state)
+        })
+        dispatchWebhooks('decision.created', { decision })
+        json(res, 201, { ok: true, decision, source: 'file' })
+      }
+    } catch (e) {
+      console.error('Error handling POST /api/office/decision', e)
+      json(res, 400, { error: 'Invalid request body' })
+    }
+    return
+  }
+
+  // PATCH /api/office/decision/:id — update decision
+  const decisionMatch = url.pathname.match(/^\/api\/office\/decision\/([a-z0-9-]+)$/)
+  if (decisionMatch && req.method === 'PATCH') {
+    try {
+      const input = await readBody(req)
+      if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+        json(res, 400, { error: 'Body must be a JSON object' }); return
+      }
+      if (await postgresAvailable()) {
+        const setClauses = []
+        if (input.status && VALID_DECISION_STATUSES.includes(input.status)) setClauses.push(`status = ${sqlString(input.status)}`)
+        if (typeof input.title === 'string') setClauses.push(`title = ${sqlString(input.title.slice(0, MAX_TITLE_LEN))}`)
+        if (typeof input.detail === 'string') setClauses.push(`detail = ${sqlString(input.detail.slice(0, MAX_BRIEF_LEN))}`)
+        if (setClauses.length === 0) { json(res, 400, { error: 'No valid fields' }); return }
+        await runPsql(`update office_decisions set ${setClauses.join(', ')} where id = ${sqlString(decisionMatch[1])};`)
+        json(res, 200, { ok: true, source: 'postgres' })
+      } else {
+        await withLock(() => {
+          const state = readState()
+          if (!state.decisions) state.decisions = []
+          const decision = state.decisions.find(d => d.id === decisionMatch[1])
+          if (!decision) { json(res, 404, { error: 'Decision not found' }); return }
+          if (input.status && VALID_DECISION_STATUSES.includes(input.status)) decision.status = input.status
+          if (typeof input.title === 'string') decision.title = input.title.slice(0, MAX_TITLE_LEN)
+          if (typeof input.detail === 'string') decision.detail = input.detail.slice(0, MAX_BRIEF_LEN)
+          state.lastUpdatedAt = new Date().toISOString()
+          writeState(state)
+          json(res, 200, { ok: true, decision, source: 'file' })
+        })
+      }
+    } catch (e) {
+      console.error('Error handling PATCH /api/office/decision/:id', e)
+      json(res, 400, { error: 'Invalid request body' })
+    }
+    return
+  }
+
+  // POST /api/office/message — send a message
+  if (url.pathname === '/api/office/message' && req.method === 'POST') {
+    try {
+      const input = await readBody(req)
+      if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+        json(res, 400, { error: 'Invalid body' }); return
+      }
+      if (!input.fromAgentId || !input.message) {
+        json(res, 400, { error: 'fromAgentId and message required' }); return
+      }
+      const msg = {
+        id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        fromAgentId: String(input.fromAgentId),
+        toAgentId: input.toAgentId ? String(input.toAgentId) : null,
+        roomId: input.roomId ? String(input.roomId) : null,
+        message: String(input.message).slice(0, MAX_MESSAGE_LEN),
+        createdAt: new Date().toISOString()
+      }
+      if (await postgresAvailable()) {
+        await runPsql(`insert into office_messages (id, from_agent_id, to_agent_id, room_id, message) values (${sqlString(msg.id)}, ${sqlString(msg.fromAgentId)}, ${sqlString(msg.toAgentId)}, ${sqlString(msg.roomId)}, ${sqlString(msg.message)});`)
+        json(res, 201, { ok: true, message: msg, source: 'postgres' })
+      } else {
+        await withLock(() => {
+          const state = readState()
+          if (!state.messages) state.messages = []
+          state.messages.push(msg)
+          state.messages = state.messages.slice(-200)
+          state.lastUpdatedAt = new Date().toISOString()
+          writeState(state)
+        })
+        json(res, 201, { ok: true, message: msg, source: 'file' })
+      }
+    } catch (e) {
+      console.error('Error handling POST /api/office/message', e)
+      json(res, 400, { error: 'Invalid request body' })
+    }
+    return
+  }
+
+  // GET /api/office/messages?room=X&agent=X
+  if (url.pathname.startsWith('/api/office/messages') && req.method === 'GET') {
+    try {
+      const roomId = url.searchParams.get('room')
+      const agentId = url.searchParams.get('agent')
+      if (await postgresAvailable()) {
+        const conditions = []
+        if (roomId) conditions.push(`room_id = ${sqlString(roomId)}`)
+        if (agentId) conditions.push(`(from_agent_id = ${sqlString(agentId)} or to_agent_id = ${sqlString(agentId)})`)
+        const where = conditions.length > 0 ? `where ${conditions.join(' and ')}` : ''
+        const raw = await runPsql(`select json_agg(json_build_object('id', id, 'fromAgentId', from_agent_id, 'toAgentId', to_agent_id, 'roomId', room_id, 'message', message, 'createdAt', created_at) order by created_at desc) from (select * from office_messages ${where} order by created_at desc limit 50) sub;`)
+        json(res, 200, { messages: raw && raw !== '' ? JSON.parse(raw) : [] })
+      } else {
+        const state = readState()
+        let msgs = state.messages || []
+        if (roomId) msgs = msgs.filter(m => m.roomId === roomId)
+        if (agentId) msgs = msgs.filter(m => m.fromAgentId === agentId || m.toAgentId === agentId)
+        json(res, 200, { messages: msgs.slice(-50) })
+      }
+    } catch (e) {
+      console.error('Error handling GET /api/office/messages', e)
+      json(res, 500, { error: 'Failed to fetch messages' })
+    }
+    return
+  }
+
+  // POST /api/office/room — create a new room
+  if (url.pathname === '/api/office/room' && req.method === 'POST') {
+    try {
+      const input = await readBody(req)
+      if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+        json(res, 400, { error: 'Body must be a JSON object' }); return
+      }
+      const required = ['id', 'name', 'team', 'purpose']
+      const missing = required.filter(f => !input[f])
+      if (missing.length > 0) { json(res, 400, { error: `Missing: ${missing.join(', ')}` }); return }
+      if (!AGENT_ID_RE.test(input.id)) { json(res, 400, { error: 'id must be kebab-case' }); return }
+      if (!input.zone || typeof input.zone.x !== 'number') { json(res, 400, { error: 'zone with x,y,w,h required' }); return }
+      if (await postgresAvailable()) {
+        const exists = await runPsql(`select count(*) from office_rooms where id = ${sqlString(input.id)};`)
+        if (parseInt(exists) > 0) { json(res, 409, { error: 'Room exists' }); return }
+        await runPsql(`insert into office_rooms (id, name, team, purpose, zone_x, zone_y, zone_w, zone_h) values (${sqlString(input.id)}, ${sqlString(String(input.name).slice(0, MAX_NAME_LEN))}, ${sqlString(String(input.team).slice(0, MAX_ROLE_LEN))}, ${sqlString(String(input.purpose).slice(0, MAX_BRIEF_LEN))}, ${input.zone.x}, ${input.zone.y}, ${input.zone.w}, ${input.zone.h});`)
+        json(res, 201, { ok: true, id: input.id, source: 'postgres' })
+      } else {
+        await withLock(() => {
+          const state = readState()
+          if (state.rooms.find(r => r.id === input.id)) { json(res, 409, { error: 'Room exists' }); return }
+          state.rooms.push({
+            id: input.id, name: String(input.name).slice(0, MAX_NAME_LEN),
+            team: String(input.team).slice(0, MAX_ROLE_LEN), purpose: String(input.purpose).slice(0, MAX_BRIEF_LEN),
+            agents: [], zone: { x: input.zone.x, y: input.zone.y, w: input.zone.w, h: input.zone.h }
+          })
+          state.lastUpdatedAt = new Date().toISOString()
+          writeState(state)
+          json(res, 201, { ok: true, id: input.id, source: 'file' })
+        })
+      }
+    } catch (e) {
+      console.error('Error handling POST /api/office/room', e)
+      json(res, 400, { error: 'Invalid request body' })
+    }
+    return
+  }
+
+  // DELETE /api/office/room/:id — delete a room
+  if (roomMatch && req.method === 'DELETE') {
+    try {
+      const roomId = roomMatch[1]
+      if (roomId === 'commons') { json(res, 400, { error: 'Cannot delete Commons' }); return }
+      if (await postgresAvailable()) {
+        const exists = await runPsql(`select count(*) from office_rooms where id = ${sqlString(roomId)};`)
+        if (parseInt(exists) === 0) { json(res, 404, { error: 'Room not found' }); return }
+        await runPsql(`update office_world_entities set room_id = 'commons' where room_id = ${sqlString(roomId)};`)
+        await runPsql(`delete from office_rooms where id = ${sqlString(roomId)};`)
+        json(res, 200, { ok: true, source: 'postgres' })
+      } else {
+        await withLock(() => {
+          const state = readState()
+          const idx = state.rooms.findIndex(r => r.id === roomId)
+          if (idx === -1) { json(res, 404, { error: 'Room not found' }); return }
+          state.rooms.splice(idx, 1)
+          for (const agent of state.agents) {
+            if (agent.roomId === roomId) agent.roomId = 'commons'
+          }
+          state.lastUpdatedAt = new Date().toISOString()
+          writeState(state)
+          json(res, 200, { ok: true, source: 'file' })
+        })
+      }
+    } catch (e) {
+      console.error('Error handling DELETE /api/office/room/:id', e)
+      json(res, 400, { error: 'Internal error' })
+    }
+    return
+  }
+
+  // POST /api/office/webhook — create webhook
+  if (url.pathname === '/api/office/webhook' && req.method === 'POST') {
+    try {
+      const input = await readBody(req)
+      if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+        json(res, 400, { error: 'Invalid body' }); return
+      }
+      if (!input.url) { json(res, 400, { error: 'url required' }); return }
+      const webhook = {
+        id: `webhook-${Date.now()}`,
+        url: String(input.url),
+        secret: input.secret ? String(input.secret) : '',
+        events: Array.isArray(input.events) ? input.events.filter(e => WEBHOOK_EVENTS.includes(e)) : [],
+        enabled: true,
+        createdAt: new Date().toISOString()
+      }
+      if (await postgresAvailable()) {
+        await runPsql(`insert into office_webhooks (id, url, secret, events, enabled) values (${sqlString(webhook.id)}, ${sqlString(webhook.url)}, ${sqlString(webhook.secret)}, ${sqlString(JSON.stringify(webhook.events))}, true);`)
+        json(res, 201, { ok: true, webhook, source: 'postgres' })
+      } else {
+        await withLock(() => {
+          const state = readState()
+          if (!state.webhooks) state.webhooks = []
+          state.webhooks.push(webhook)
+          state.lastUpdatedAt = new Date().toISOString()
+          writeState(state)
+        })
+        json(res, 201, { ok: true, webhook, source: 'file' })
+      }
+    } catch (e) {
+      console.error('Error handling POST /api/office/webhook', e)
+      json(res, 400, { error: 'Invalid request body' })
+    }
+    return
+  }
+
+  // DELETE /api/office/webhook/:id
+  const webhookMatch = url.pathname.match(/^\/api\/office\/webhook\/([a-z0-9-]+)$/)
+  if (webhookMatch && req.method === 'DELETE') {
+    try {
+      if (await postgresAvailable()) {
+        await runPsql(`delete from office_webhook_logs where webhook_id = ${sqlString(webhookMatch[1])};`)
+        await runPsql(`delete from office_webhooks where id = ${sqlString(webhookMatch[1])};`)
+        json(res, 200, { ok: true, source: 'postgres' })
+      } else {
+        await withLock(() => {
+          const state = readState()
+          if (!state.webhooks) state.webhooks = []
+          state.webhooks = state.webhooks.filter(w => w.id !== webhookMatch[1])
+          state.lastUpdatedAt = new Date().toISOString()
+          writeState(state)
+        })
+        json(res, 200, { ok: true, source: 'file' })
+      }
+    } catch (e) {
+      console.error('Error handling DELETE /api/office/webhook/:id', e)
+      json(res, 400, { error: 'Internal error' })
+    }
+    return
+  }
+
+  // GET /api/office/assignments — query with filters (history)
+  if (url.pathname.startsWith('/api/office/assignments') && req.method === 'GET') {
+    try {
+      const status = url.searchParams.get('status')
+      const agent = url.searchParams.get('agent')
+      const limit = Math.min(Number(url.searchParams.get('limit') || 100), 500)
+      if (await postgresAvailable()) {
+        const conditions = []
+        if (status) conditions.push(`status = ${sqlString(status)}`)
+        if (agent) conditions.push(`target_agent_id = ${sqlString(agent)}`)
+        const where = conditions.length > 0 ? `where ${conditions.join(' and ')}` : ''
+        const raw = await runPsql(`select coalesce(json_agg(json_build_object('id', id, 'targetAgentId', target_agent_id, 'taskTitle', task_title, 'taskBrief', task_brief, 'priority', priority, 'status', status, 'routingTarget', routing_target, 'createdAt', created_at, 'source', source) order by created_at desc), '[]'::json) from (select * from office_assignments ${where} order by created_at desc limit ${limit}) sub;`)
+        json(res, 200, { assignments: JSON.parse(raw) })
+      } else {
+        const state = readState()
+        let list = state.assignments || []
+        if (status) list = list.filter(a => a.status === status)
+        if (agent) list = list.filter(a => a.targetAgentId === agent)
+        json(res, 200, { assignments: list.slice(0, limit) })
+      }
+    } catch (e) {
+      console.error('Error handling GET /api/office/assignments', e)
+      json(res, 500, { error: 'Failed to fetch assignments' })
+    }
+    return
+  }
+
   if (url.pathname === '/api/office/activity' && req.method === 'POST') {
     try {
       const entry = await readBody(req)
@@ -976,11 +1401,11 @@ server.listen(PORT, '0.0.0.0', async () => {
     let agents = []
     let assignments = []
     if (await postgresAvailable()) {
-      const raw = await runPsql(`select id, name, role from office_agents where office_visible = true;`)
+      const raw = await runPsql(`select id, name, role, coalesce(system_prompt, '') from office_agents where office_visible = true;`)
       if (raw) {
         for (const line of raw.split('\n')) {
-          const [id, name, role] = line.split('|')
-          if (id) registerAgent(id.trim(), name?.trim() || id, role?.trim() || '')
+          const [id, name, role, systemPrompt] = line.split('|')
+          if (id) registerAgent(id.trim(), name?.trim() || id, role?.trim() || '', systemPrompt?.trim() || '')
         }
       }
       // Re-queue active assignments
@@ -990,7 +1415,7 @@ server.listen(PORT, '0.0.0.0', async () => {
       agents = state.agents || []
       assignments = state.assignments || []
       for (const agent of agents) {
-        registerAgent(agent.id, agent.name, agent.role)
+        registerAgent(agent.id, agent.name, agent.role, agent.systemPrompt || '')
       }
       let changed = false
       for (const a of assignments) {

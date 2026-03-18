@@ -637,6 +637,7 @@ function AgentForm({ agent, onClose }: { agent?: OfficeAgent; onClose: () => voi
         focus: fd.get('focus') as string,
         criticalTask: fd.get('criticalTask') === 'on',
         collaborationMode: fd.get('collaborationMode') as string,
+        systemPrompt: fd.get('systemPrompt') as string,
       }
       await updateAgent(agent.id, input)
     } else {
@@ -650,6 +651,7 @@ function AgentForm({ agent, onClose }: { agent?: OfficeAgent; onClose: () => voi
         focus: fd.get('focus') as string,
         criticalTask: fd.get('criticalTask') === 'on',
         collaborationMode: fd.get('collaborationMode') as string,
+        systemPrompt: fd.get('systemPrompt') as string,
       }
       await createAgent(input)
     }
@@ -701,6 +703,30 @@ function AgentForm({ agent, onClose }: { agent?: OfficeAgent; onClose: () => voi
         <input type="checkbox" name="criticalTask" defaultChecked={agent?.criticalTask ?? false} />
         <span>Critical task</span>
       </label>
+      <details className="system-prompt-section">
+        <summary className="settings-label" style={{ cursor: 'pointer', padding: '4px 0' }}>System prompt (optional)</summary>
+        <label htmlFor="agent-prompt" className="visually-hidden">System prompt</label>
+        <textarea id="agent-prompt" name="systemPrompt" placeholder="Custom system prompt for this agent..." rows={4} maxLength={5000} defaultValue={agent?.systemPrompt ?? ''} className="assign-input" />
+        <div className="prompt-templates">
+          <span className="settings-label">Templates:</span>
+          <button type="button" className="prompt-template-btn" onClick={e => {
+            const ta = (e.target as HTMLElement).closest('details')?.querySelector('textarea')
+            if (ta) ta.value = `You are a meticulous code reviewer. Focus on correctness, security, and performance. Flag potential bugs, suggest improvements, and ensure code follows best practices. Be concise but thorough.`
+          }}>Code reviewer</button>
+          <button type="button" className="prompt-template-btn" onClick={e => {
+            const ta = (e.target as HTMLElement).closest('details')?.querySelector('textarea')
+            if (ta) ta.value = `You are a technical writer. Write clear, well-structured documentation. Focus on explaining the "why" behind decisions, provide code examples where relevant, and ensure documentation stays actionable and up-to-date.`
+          }}>Tech writer</button>
+          <button type="button" className="prompt-template-btn" onClick={e => {
+            const ta = (e.target as HTMLElement).closest('details')?.querySelector('textarea')
+            if (ta) ta.value = `You are a thorough researcher. Investigate topics deeply, cross-reference multiple sources, synthesize findings clearly, and highlight key insights with supporting evidence. Present balanced viewpoints.`
+          }}>Researcher</button>
+          <button type="button" className="prompt-template-btn" onClick={e => {
+            const ta = (e.target as HTMLElement).closest('details')?.querySelector('textarea')
+            if (ta) ta.value = `You are a project manager. Break down work into clear tasks, track dependencies, identify blockers early, and communicate status updates concisely. Focus on unblocking the team and maintaining momentum.`
+          }}>PM</button>
+        </div>
+      </details>
       <button type="submit" className="assign-submit">{isEdit ? 'Save changes' : 'Create agent'}</button>
     </form>
   )
@@ -1116,6 +1142,28 @@ export function App() {
             </div>
           )}
 
+          {/* Decisions tab */}
+          {sideTab === 'decisions' && (
+            <div className="decisions-panel" role="tabpanel">
+              <button className="add-agent-btn" onClick={() => setShowDecisionForm(true)}>+ New Decision</button>
+              {showDecisionForm && <DecisionForm agents={agents} onSubmit={createDecision} onClose={() => setShowDecisionForm(false)} />}
+              {decisions.length === 0 && !showDecisionForm && <p className="feed-empty">No decisions yet</p>}
+              {decisions.map(d => (
+                <DecisionCard key={d.id} decision={d} agents={agents} onUpdate={updateDecision} />
+              ))}
+            </div>
+          )}
+
+          {/* Chat tab */}
+          {sideTab === 'chat' && (
+            <ChatPanel messages={messages} agents={agents} rooms={rooms} currentRoomId={selectedRoomId} onSend={sendMessage} />
+          )}
+
+          {/* History tab */}
+          {sideTab === 'history' && (
+            <TaskHistoryPanel assignments={assignments} agents={agents} />
+          )}
+
           {/* Settings tab */}
           {sideTab === 'settings' && <SettingsPanel />}
 
@@ -1155,6 +1203,12 @@ export function App() {
                 <dt>Focus</dt><dd>{selected.focus}</dd>
                 <dt>Mode</dt><dd>{selected.collaborationMode}</dd>
                 <dt>Priority</dt><dd>{selected.criticalTask ? 'Critical' : 'Non-critical'}</dd>
+                {selected.systemPrompt && (
+                  <>
+                    <dt>Prompt</dt>
+                    <dd><details className="prompt-preview"><summary>View system prompt</summary><pre className="prompt-text">{selected.systemPrompt}</pre></details></dd>
+                  </>
+                )}
                 <dt>Runtime</dt>
                 <dd>
                   {(() => {
@@ -1248,6 +1302,7 @@ export function App() {
       </div>
 
       {agents.length === 0 && dataSource !== 'seed' && <WelcomeOnboarding />}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

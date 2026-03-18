@@ -554,6 +554,102 @@ button:focus:not(:focus-visible) { outline: none; }
   100% { background-position: -200% 0; }
 }
 
+/* ── Toast notifications ─────────────────────────── */
+.toast-container {
+  position: fixed; bottom: 80px; right: 16px; z-index: 200;
+  display: flex; flex-direction: column; gap: 8px; max-width: 320px;
+  pointer-events: none;
+}
+.toast {
+  padding: 8px 12px; display: flex; align-items: center; gap: 8px;
+  background: #1a2030; border: 1px solid; font-size: 11px; line-height: 1.4;
+  animation: toast-in 0.3s ease-out; pointer-events: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.toast-info { border-color: #95d8ff44; color: #95d8ff; }
+.toast-success { border-color: #78f7b544; color: #78f7b5; }
+.toast-warning { border-color: #ffd47944; color: #ffd479; }
+.toast-error { border-color: #ff8b8b44; color: #ff8b8b; }
+.toast-message { flex: 1; }
+.toast-dismiss { background: none; border: none; color: inherit; cursor: pointer; font-size: 14px; padding: 0 4px; opacity: 0.7; }
+.toast-dismiss:hover { opacity: 1; }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Decision cards ──────────────────────────────── */
+.decisions-panel { padding: 8px 10px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.decision-card {
+  padding: 8px; background: #181d2a; border: 1px solid rgba(255,255,255,0.05);
+  border-left: 3px solid #ffd479;
+}
+.decision-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.decision-head strong { font-size: 12px; }
+.decision-status { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
+.decision-detail { font-size: 11px; color: var(--text2); line-height: 1.4; margin-bottom: 4px; }
+.decision-meta { display: flex; gap: 10px; font-size: 10px; color: var(--text2); }
+.decision-actions { display: flex; gap: 6px; margin-top: 6px; }
+.decision-accept {
+  padding: 4px 10px; font-family: var(--font); font-size: 7px;
+  color: #78f7b5; border: 1px solid #78f7b566; background: #78f7b510; cursor: pointer;
+}
+.decision-accept:hover { background: #78f7b520; }
+.decision-reject {
+  padding: 4px 10px; font-family: var(--font); font-size: 7px;
+  color: #ff8b8b; border: 1px solid #ff8b8b66; background: #ff8b8b10; cursor: pointer;
+}
+.decision-reject:hover { background: #ff8b8b20; }
+
+/* ── Chat panel ──────────────────────────────────── */
+.chat-panel { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+.chat-room-select { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.chat-messages { flex: 1; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.chat-msg { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; padding: 4px 8px; background: rgba(255,255,255,0.02); }
+.chat-sender { font-size: 10px; color: #95d8ff; }
+.chat-text { flex: 1; min-width: 0; line-height: 1.4; }
+.chat-time { font-size: 9px; color: var(--text2); }
+.chat-form { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid rgba(255,255,255,0.06); }
+.chat-agent-select { width: 100px; flex-shrink: 0; }
+.chat-input { flex: 1; }
+.chat-send { flex-shrink: 0; padding: 6px 12px; }
+
+/* ── Task history / analytics ────────────────────── */
+.history-panel { padding: 8px 10px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.history-stats { display: flex; gap: 8px; }
+.stat-card {
+  flex: 1; padding: 8px; background: #181d2a; border: 1px solid rgba(255,255,255,0.05);
+  text-align: center; display: flex; flex-direction: column; gap: 2px;
+}
+.stat-value { font-family: var(--font); font-size: 14px; color: #95d8ff; }
+.stat-label { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; }
+.history-chart { display: flex; flex-direction: column; gap: 4px; }
+.chart-bar-row { display: flex; align-items: center; gap: 6px; font-size: 10px; }
+.chart-label { width: 60px; text-align: right; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-bar { height: 14px; background: #95d8ff33; border: 1px solid #95d8ff44; min-width: 2px; transition: width 0.3s; }
+.chart-value { color: #95d8ff; font-family: var(--font); font-size: 8px; }
+.history-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.history-filters .assign-select { flex: 1; min-width: 100px; }
+
+/* ── System prompt preview ───────────────────────── */
+.prompt-preview { font-size: 11px; }
+.prompt-preview summary { cursor: pointer; color: var(--text2); font-size: 10px; }
+.prompt-text {
+  margin-top: 4px; padding: 6px 8px; background: #141a26; border: 1px solid #2a3448;
+  font-size: 10px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+  max-height: 120px; overflow-y: auto; font-family: var(--font-ui);
+}
+.system-prompt-section { margin-top: 4px; }
+.prompt-templates { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.prompt-template-btn {
+  padding: 3px 8px; font-size: 9px; background: #1e2a3e; border: 1px solid #3a4a68;
+  color: #95d8ff; cursor: pointer;
+}
+.prompt-template-btn:hover { background: #243250; }
+
+/* ── Agent dragging ──────────────────────────────── */
+.agent-sprite.dragging-agent { opacity: 0.6; cursor: grabbing; z-index: 10; }
+
 /* ── CSS containment ─────────────────────────────── */
 .map-container { contain: layout; }
 .bottom-sheet { contain: layout; }
@@ -568,6 +664,7 @@ button:focus:not(:focus-visible) { outline: none; }
   .room-overlay, .agent-sprite { transition: none; }
   .roster-card, .side-tab, .assign-btn, .agent-edit-btn, .agent-delete-btn { transition: none; }
   .feed-skeleton { animation: none; }
+  .toast { animation: none; }
 }
 
 /* ── Forced colors (Windows High Contrast) ───────── */

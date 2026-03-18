@@ -83,11 +83,11 @@ describe('App — with agents (via API)', () => {
     expect(screen.getByText('Presence')).toBeInTheDocument()
   })
 
-  it('tab navigation has Agents, Feed, All Tasks', () => {
+  it('tab navigation has Agents, Feed, Tasks', () => {
     renderApp()
     expect(screen.getByRole('tab', { name: 'Agents' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Feed' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /All Tasks/ })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Tasks/ })).toBeInTheDocument()
   })
 
   it('tab navigation switches tabs', () => {
