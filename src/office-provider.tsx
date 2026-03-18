@@ -884,12 +884,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   // ── Messages ──
   const sendMessage = useCallback(async (input: { fromAgentId: string; toAgentId?: string; roomId?: string; message: string }): Promise<boolean> => {
-    const optimistic: MessageRecord = {
-      id: `msg-${Date.now()}`, fromAgentId: input.fromAgentId,
-      toAgentId: input.toAgentId ?? null, roomId: input.roomId ?? null,
-      message: input.message, createdAt: new Date().toISOString()
-    }
-    setMessages(prev => [...prev, optimistic].slice(-100))
+    // No optimistic insert — SSE message.sent event adds it instantly
     try {
       const res = await fetch('/api/office/message', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

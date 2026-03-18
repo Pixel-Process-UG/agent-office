@@ -1,7 +1,7 @@
 # Stage 1: Build frontend + server
 FROM node:22-alpine AS builder
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json setup.mjs ./
 RUN npm ci
 COPY . .
 RUN npm run build

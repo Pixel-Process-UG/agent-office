@@ -32,7 +32,7 @@ jobs:
           CI: true
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - name: Build server
         run: npm run build:server
