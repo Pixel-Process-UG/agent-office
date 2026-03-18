@@ -39,6 +39,9 @@ export interface AssignmentRecord {
   routingTarget: 'agent_runtime' | 'work_tracker' | 'both'
   createdAt: string
   source?: string
+  result?: string
+  resultSavedAt?: string
+  resultAction?: 'saved' | 'dismissed' | 'visible'
 }
 
 export interface ActivityItem {

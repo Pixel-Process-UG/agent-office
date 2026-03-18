@@ -260,6 +260,56 @@ function RoomDetailCard({ room, agents, presenceColors, onClose }: {
   )
 }
 
+// ── Complete task form (inline) ──────────────────────
+function CompleteTaskForm({ assignmentId, taskTitle, onClose }: { assignmentId: string; taskTitle: string; onClose: () => void }) {
+  const { completeTask } = useOffice()
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => { textareaRef.current?.focus() }, [])
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const result = (fd.get('result') as string)?.trim()
+    if (!result) return
+    completeTask(assignmentId, result)
+    onClose()
+  }
+
+  return (
+    <form className="complete-form" onSubmit={handleSubmit}>
+      <div className="assign-form-head">
+        <strong>Complete: {truncate(taskTitle, 30)}</strong>
+        <button type="button" className="assign-close" aria-label="Close" onClick={onClose}>&times;</button>
+      </div>
+      <label htmlFor={`result-${assignmentId}`} className="visually-hidden">Result</label>
+      <textarea ref={textareaRef} id={`result-${assignmentId}`} name="result" placeholder="Enter task result..." rows={3} required aria-required="true" className="assign-input" />
+      <button type="submit" className="assign-submit">Submit result</button>
+    </form>
+  )
+}
+
+// ── Task result display ──────────────────────────────
+function TaskResultDisplay({ assignment }: { assignment: { id: string; result?: string; resultAction?: string; resultSavedAt?: string } }) {
+  const { saveResult, dismissResult } = useOffice()
+  if (!assignment.result) return null
+  if (assignment.resultAction === 'dismissed') return null
+
+  return (
+    <div className="task-result">
+      <p className="task-result-text">{assignment.result}</p>
+      {assignment.resultAction !== 'saved' ? (
+        <div className="task-result-actions">
+          <button className="result-save-btn" onClick={() => saveResult(assignment.id)}>Save locally</button>
+          <button className="result-dismiss-btn" onClick={() => dismissResult(assignment.id)}>Dismiss</button>
+        </div>
+      ) : (
+        <span className="result-saved-label">Saved {assignment.resultSavedAt ? relativeTime(assignment.resultSavedAt) : ''}</span>
+      )}
+    </div>
+  )
+}
+
 // ── Assignment form ──────────────────────────────────
 function AssignmentForm({ targetAgentId, onClose }: { targetAgentId: string; onClose: () => void }) {
   const { assignTask, agents } = useOffice()
@@ -420,6 +470,12 @@ export function App() {
   const [sideTab, setSideTab] = useState<'roster' | 'activity' | 'tasks' | 'settings'>('roster')
   const [hoveredAgent, setHoveredAgent] = useState<string | null>(null)
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null)
+
+  // Count of done tasks with unhandled results (not saved, not dismissed)
+  const pendingResultCount = assignments.filter(a =>
+    a.status === 'done' && a.result && a.resultAction !== 'saved' && a.resultAction !== 'dismissed'
+  ).length
 
   const selected = agents.find(a => a.id === selectedAgentId)
   const selectedRoom = selected ? rooms.find(r => r.id === selected.roomId) : null
@@ -608,7 +664,10 @@ export function App() {
           <div className="side-tabs" role="tablist">
             <button className={`side-tab ${sideTab === 'roster' ? 'active' : ''}`} role="tab" aria-selected={sideTab === 'roster'} onClick={() => setSideTab('roster')}>Agents</button>
             <button className={`side-tab ${sideTab === 'activity' ? 'active' : ''}`} role="tab" aria-selected={sideTab === 'activity'} onClick={() => setSideTab('activity')}>Feed</button>
-            <button className={`side-tab ${sideTab === 'tasks' ? 'active' : ''}`} role="tab" aria-selected={sideTab === 'tasks'} onClick={() => setSideTab('tasks')}>All Tasks{assignments.length > 0 ? ` (${assignments.length})` : ''}</button>
+            <button className={`side-tab ${sideTab === 'tasks' ? 'active' : ''}`} role="tab" aria-selected={sideTab === 'tasks'} onClick={() => setSideTab('tasks')}>
+              All Tasks{assignments.length > 0 ? ` (${assignments.length})` : ''}
+              {pendingResultCount > 0 && <span className="result-badge">{pendingResultCount}</span>}
+            </button>
             <button className={`side-tab ${sideTab === 'settings' ? 'active' : ''}`} role="tab" aria-selected={sideTab === 'settings'} onClick={() => setSideTab('settings')}>Settings</button>
           </div>
 
@@ -664,7 +723,7 @@ export function App() {
               {assignments.map(a => {
                 const agent = agents.find(ag => ag.id === a.targetAgentId)
                 return (
-                  <div key={a.id} className={`task-card task-${a.priority}`}>
+                  <div key={a.id} className={`task-card task-${a.priority} ${a.status === 'done' ? 'task-done' : ''}`}>
                     <div className="task-head">
                       <strong>{a.taskTitle}</strong>
                       <span className="task-priority">{a.priority}</span>
@@ -675,6 +734,13 @@ export function App() {
                       <span>{a.routingTarget.replace('_', ' ')}</span>
                     </div>
                     {a.taskBrief && <p className="task-brief">{a.taskBrief}</p>}
+                    {a.status === 'active' && completingTaskId !== a.id && (
+                      <button className="complete-task-btn" onClick={() => setCompletingTaskId(a.id)}>Complete</button>
+                    )}
+                    {completingTaskId === a.id && (
+                      <CompleteTaskForm assignmentId={a.id} taskTitle={a.taskTitle} onClose={() => setCompletingTaskId(null)} />
+                    )}
+                    {a.status === 'done' && <TaskResultDisplay assignment={a} />}
                   </div>
                 )
               })}
@@ -748,6 +814,27 @@ export function App() {
                   )}
                 </div>
               </div>
+              {/* Active/Done tasks for this agent */}
+              {selectedAssignments.filter(a => a.status === 'active' || a.status === 'done').length > 0 && (
+                <div className="agent-tasks-section">
+                  {selectedAssignments.filter(a => a.status === 'active').map(a => (
+                    <div key={a.id} className="task-card task-inline">
+                      <div className="task-head"><strong>{a.taskTitle}</strong><span className="task-priority">{a.priority}</span></div>
+                      {completingTaskId === a.id ? (
+                        <CompleteTaskForm assignmentId={a.id} taskTitle={a.taskTitle} onClose={() => setCompletingTaskId(null)} />
+                      ) : (
+                        <button className="complete-task-btn" onClick={() => setCompletingTaskId(a.id)}>Complete</button>
+                      )}
+                    </div>
+                  ))}
+                  {selectedAssignments.filter(a => a.status === 'done' && a.result).map(a => (
+                    <div key={a.id} className="task-card task-done task-inline">
+                      <div className="task-head"><strong>{a.taskTitle}</strong><span className="task-priority">done</span></div>
+                      <TaskResultDisplay assignment={a} />
+                    </div>
+                  ))}
+                </div>
+              )}
               {showAgentForm === 'edit' ? (
                 <AgentForm agent={selected} onClose={() => setShowAgentForm(null)} />
               ) : showAssignForm ? (

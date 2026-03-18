@@ -463,6 +463,49 @@ button:focus:not(:focus-visible) { outline: none; }
 .room-edit-name { font-size: 12px; font-weight: bold; }
 .room-edit-team { font-size: 10px; color: var(--text2); }
 
+/* ── Task results ────────────────────────────────── */
+.task-done { border-left: 3px solid #78f7b5; }
+
+.task-result {
+  margin-top: 6px; padding: 6px 8px;
+  background: rgba(120, 247, 181, 0.06); border: 1px solid rgba(120, 247, 181, 0.15);
+  font-size: 11px; line-height: 1.5;
+}
+.task-result-text { color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.task-result-actions { display: flex; gap: 6px; margin-top: 6px; }
+.result-save-btn, .result-dismiss-btn {
+  font-family: var(--font); font-size: 8px; padding: 4px 10px;
+  border: 1px solid; cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.result-save-btn { color: #78f7b5; border-color: #78f7b566; background: #78f7b510; }
+.result-save-btn:hover { background: #78f7b520; }
+.result-dismiss-btn { color: #8792a8; border-color: #8792a844; background: transparent; }
+.result-dismiss-btn:hover { background: #8792a810; }
+.result-saved-label { font-family: var(--font); font-size: 8px; color: #78f7b5; margin-top: 4px; display: block; }
+
+.complete-task-btn {
+  margin-top: 6px; padding: 4px 12px;
+  font-family: var(--font); font-size: 8px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: #95d8ff; border: 1px solid #95d8ff44; background: #95d8ff10; cursor: pointer;
+}
+.complete-task-btn:hover { background: #95d8ff20; }
+
+.complete-form {
+  margin-top: 6px; display: flex; flex-direction: column; gap: 6px;
+  padding: 8px; background: var(--surface2); border: 1px solid var(--border);
+}
+
+.result-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  margin-left: 4px; border-radius: 8px;
+  background: #f76c6c; color: #fff;
+  font-family: var(--font); font-size: 7px; line-height: 1;
+}
+
+.agent-tasks-section { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.task-inline { padding: 6px 8px; }
+
 /* ── Responsive ───────────────────────────────────── */
 
 /* Tablet */

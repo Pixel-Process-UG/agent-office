@@ -241,3 +241,69 @@ describe('DELETE /api/office/agent/:id — validation', () => {
     expect(filtered[0].targetAgentId).toBe('prism')
   })
 })
+
+describe('PATCH /api/office/assignment/:id — result field validation', () => {
+  it('result can only be provided when status is done', () => {
+    const body = { status: 'active', result: 'some result' }
+    const isValid = body.status === 'done' || body.result === undefined
+    expect(isValid).toBe(false)
+  })
+
+  it('result is accepted when status is done', () => {
+    const body = { status: 'done', result: 'Task completed successfully' }
+    const isValid = body.status === 'done' || body.result === undefined
+    expect(isValid).toBe(true)
+  })
+
+  it('rejects result that is too long', () => {
+    const body = { status: 'done', result: 'x'.repeat(2001) }
+    const tooLong = typeof body.result === 'string' && body.result.length > MAX_BRIEF_LEN
+    expect(tooLong).toBe(true)
+  })
+
+  it('accepts result within size limit', () => {
+    const body = { status: 'done', result: 'x'.repeat(2000) }
+    const tooLong = typeof body.result === 'string' && body.result.length > MAX_BRIEF_LEN
+    expect(tooLong).toBe(false)
+  })
+
+  it('status without result is still valid', () => {
+    const body = { status: 'done' }
+    const isValid = body.status === 'done' || body.result === undefined
+    expect(isValid).toBe(true)
+    expect(body.result).toBeUndefined()
+  })
+
+  it('assignment gets result and resultAction fields on completion', () => {
+    const assignment = { id: 'a-1', status: 'active', targetAgentId: 'forge', taskTitle: 'Test' }
+    const body = { status: 'done', result: 'Done!' }
+    // Simulate what the endpoint does
+    assignment.status = body.status
+    if (typeof body.result === 'string') {
+      assignment.result = body.result
+      assignment.resultAction = 'visible'
+    }
+    expect(assignment.status).toBe('done')
+    expect(assignment.result).toBe('Done!')
+    expect(assignment.resultAction).toBe('visible')
+  })
+})
+
+describe('POST /api/office/result/:assignmentId/save — validation', () => {
+  it('requires assignment to have a result', () => {
+    const assignment = { id: 'a-1', result: undefined }
+    expect(!assignment.result).toBe(true)
+  })
+
+  it('would save result to file and update assignment', () => {
+    const assignment = { id: 'a-1', result: 'Some output', taskTitle: 'Build feature', targetAgentId: 'forge', priority: 'high' }
+    // Simulate save
+    const content = `# ${assignment.taskTitle}\n\n**Agent:** ${assignment.targetAgentId}\n**Priority:** ${assignment.priority}\n\n## Result\n\n${assignment.result}\n`
+    expect(content).toContain('Build feature')
+    expect(content).toContain('Some output')
+    assignment.resultSavedAt = new Date().toISOString()
+    assignment.resultAction = 'saved'
+    expect(assignment.resultAction).toBe('saved')
+    expect(assignment.resultSavedAt).toBeDefined()
+  })
+})

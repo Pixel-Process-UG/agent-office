@@ -138,7 +138,7 @@ function officeApiPlugin(): Plugin {
           return
         }
 
-        // PATCH /api/office/assignment/:id — update assignment status
+        // PATCH /api/office/assignment/:id — update assignment status (+ optional result)
         const assignMatch = req.url?.match(/^\/api\/office\/assignment\/([a-z0-9-]+)$/)
         if (req.method === 'PATCH' && assignMatch) {
           try {
@@ -154,6 +154,16 @@ function officeApiPlugin(): Plugin {
               res.end(JSON.stringify({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` }))
               return
             }
+            if (raw.result !== undefined && raw.status !== 'done') {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: 'result can only be provided when status is done' }))
+              return
+            }
+            if (raw.result !== undefined && typeof raw.result === 'string' && raw.result.length > MAX_BRIEF_LEN) {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: 'result too long (max 2000 chars)' }))
+              return
+            }
             await withLock(() => {
               const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'))
               if (!state.assignments) state.assignments = []
@@ -164,7 +174,23 @@ function officeApiPlugin(): Plugin {
                 return
               }
               assignment.status = raw.status
+              if (typeof raw.result === 'string') {
+                assignment.result = raw.result
+                assignment.resultAction = 'visible'
+              }
               state.lastUpdatedAt = new Date().toISOString()
+              // Auto-create activity for completion with result
+              if (raw.status === 'done' && raw.result) {
+                if (!state.activity) state.activity = []
+                state.activity.unshift({
+                  id: `act-${Date.now()}`,
+                  kind: 'assignment',
+                  text: `Task "${assignment.taskTitle}" completed with result`,
+                  agentId: assignment.targetAgentId,
+                  createdAt: new Date().toISOString()
+                })
+                state.activity = state.activity.slice(0, 100)
+              }
               fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2))
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ ok: true, assignment }))
@@ -494,6 +520,48 @@ function officeApiPlugin(): Plugin {
             })
           } catch (err) {
             res.statusCode = 400
+            res.end(JSON.stringify({ error: String(err) }))
+          }
+          return
+        }
+
+        // POST /api/office/result/:assignmentId/save — save result to local file
+        const resultSaveMatch = req.url?.match(/^\/api\/office\/result\/([a-z0-9-]+)\/save$/)
+        if (req.method === 'POST' && resultSaveMatch) {
+          try {
+            const assignmentId = resultSaveMatch[1]
+            const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'))
+            if (!state.assignments) state.assignments = []
+            const assignment = state.assignments.find((a: { id: string }) => a.id === assignmentId)
+            if (!assignment) {
+              res.statusCode = 404
+              res.end(JSON.stringify({ error: 'Assignment not found' }))
+              return
+            }
+            if (!assignment.result) {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: 'No result to save' }))
+              return
+            }
+            const resultsDir = path.resolve(__dirname, 'state/results')
+            if (!fs.existsSync(resultsDir)) fs.mkdirSync(resultsDir, { recursive: true })
+            const filePath = path.join(resultsDir, `${assignmentId}.md`)
+            const content = `# ${assignment.taskTitle}\n\n**Agent:** ${assignment.targetAgentId}\n**Completed:** ${new Date().toISOString()}\n**Priority:** ${assignment.priority}\n\n## Result\n\n${assignment.result}\n`
+            fs.writeFileSync(filePath, content)
+            await withLock(() => {
+              const freshState = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'))
+              const a = freshState.assignments?.find((x: { id: string }) => x.id === assignmentId)
+              if (a) {
+                a.resultSavedAt = new Date().toISOString()
+                a.resultAction = 'saved'
+                freshState.lastUpdatedAt = new Date().toISOString()
+                fs.writeFileSync(STATE_FILE, JSON.stringify(freshState, null, 2))
+              }
+            })
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: true, path: filePath }))
+          } catch (err) {
+            res.statusCode = 500
             res.end(JSON.stringify({ error: String(err) }))
           }
           return

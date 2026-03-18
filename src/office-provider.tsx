@@ -38,6 +38,9 @@ interface OfficeState {
     priority: 'low' | 'medium' | 'high'
     routingTarget: 'agent_runtime' | 'work_tracker' | 'both'
   }) => void
+  completeTask: (assignmentId: string, result: string) => Promise<boolean>
+  saveResult: (assignmentId: string) => Promise<boolean>
+  dismissResult: (assignmentId: string) => void
   createAgent: (input: AgentCreateInput) => Promise<boolean>
   updateAgent: (id: string, input: AgentUpdateInput) => Promise<boolean>
   deleteAgent: (id: string) => Promise<boolean>
@@ -134,13 +137,31 @@ function normalizeAssignment(assignment: AssignmentRecord): AssignmentRecord {
     ...assignment,
     taskBrief: assignment.taskBrief ?? '',
     source: assignment.source ?? 'system',
+    result: assignment.result,
+    resultSavedAt: assignment.resultSavedAt,
+    resultAction: assignment.resultAction,
   }
 }
 
 function mergeAssignments(current: AssignmentRecord[], incoming: AssignmentRecord[]): AssignmentRecord[] {
+  const currentMap = new Map<string, AssignmentRecord>()
+  for (const a of current.map(normalizeAssignment)) currentMap.set(a.id, a)
+
   const merged = new Map<string, AssignmentRecord>()
-  for (const assignment of [...current, ...incoming].map(normalizeAssignment)) {
-    merged.set(assignment.id, assignment)
+  for (const a of current.map(normalizeAssignment)) merged.set(a.id, a)
+  for (const a of incoming.map(normalizeAssignment)) {
+    const prev = currentMap.get(a.id)
+    // Preserve local-only result fields if incoming doesn't have them
+    if (prev) {
+      merged.set(a.id, {
+        ...a,
+        result: a.result ?? prev.result,
+        resultSavedAt: a.resultSavedAt ?? prev.resultSavedAt,
+        resultAction: a.resultAction ?? prev.resultAction,
+      })
+    } else {
+      merged.set(a.id, a)
+    }
   }
   return Array.from(merged.values())
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -384,6 +405,64 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     })
   }, [rawAgents])
 
+  const completeTask: OfficeState['completeTask'] = useCallback(async (assignmentId, result) => {
+    // Optimistic update
+    setAssignments(current =>
+      current.map(a => a.id === assignmentId
+        ? { ...a, status: 'done' as const, result, resultAction: 'visible' as const }
+        : a)
+    )
+    const assignment = assignments.find(a => a.id === assignmentId)
+    if (assignment) {
+      const name = rawAgents.find(ag => ag.id === assignment.targetAgentId)?.name ?? assignment.targetAgentId
+      addActivity({ kind: 'assignment', text: `Task "${assignment.taskTitle}" completed with result`, agentId: assignment.targetAgentId })
+      patchAgent(assignment.targetAgentId, { presence: 'available', focus: `Completed: ${assignment.taskTitle}` })
+    }
+    try {
+      const res = await fetch(`/api/office/assignment/${assignmentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'done', result }),
+      })
+      if (!res.ok) {
+        addActivity({ kind: 'system', text: 'Failed to persist task completion — saved locally only' })
+        return false
+      }
+      return true
+    } catch {
+      addActivity({ kind: 'system', text: 'Failed to persist task completion — network error' })
+      return false
+    }
+  }, [assignments, rawAgents])
+
+  const saveResult: OfficeState['saveResult'] = useCallback(async (assignmentId) => {
+    try {
+      const res = await fetch(`/api/office/result/${assignmentId}/save`, { method: 'POST' })
+      if (!res.ok) {
+        addActivity({ kind: 'system', text: 'Failed to save result locally' })
+        return false
+      }
+      setAssignments(current =>
+        current.map(a => a.id === assignmentId
+          ? { ...a, resultAction: 'saved' as const, resultSavedAt: new Date().toISOString() }
+          : a)
+      )
+      addActivity({ kind: 'system', text: 'Result saved to local file' })
+      return true
+    } catch {
+      addActivity({ kind: 'system', text: 'Failed to save result — network error' })
+      return false
+    }
+  }, [])
+
+  const dismissResult: OfficeState['dismissResult'] = useCallback((assignmentId) => {
+    setAssignments(current =>
+      current.map(a => a.id === assignmentId
+        ? { ...a, resultAction: 'dismissed' as const }
+        : a)
+    )
+  }, [])
+
   const createAgent = useCallback(async (input: AgentCreateInput): Promise<boolean> => {
     // Optimistic local update
     const newAgent: AgentCard = {
@@ -553,12 +632,15 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     connectionError,
     selectAgent: setSelectedAgentId,
     assignTask,
+    completeTask,
+    saveResult,
+    dismissResult,
     createAgent,
     updateAgent,
     deleteAgent,
     updateSettings,
     updateRoom
-  }), [agents, currentRooms, currentSeats, currentPolicy, officeSettings, assignments, activity, selectedAgentId, berlinTimeLabel, withinWorkday, dataSource, connectionError, assignTask, createAgent, updateAgent, deleteAgent, updateSettings, updateRoom])
+  }), [agents, currentRooms, currentSeats, currentPolicy, officeSettings, assignments, activity, selectedAgentId, berlinTimeLabel, withinWorkday, dataSource, connectionError, assignTask, completeTask, saveResult, dismissResult, createAgent, updateAgent, deleteAgent, updateSettings, updateRoom])
 
   return <OfficeContext.Provider value={value}>{children}</OfficeContext.Provider>
 }

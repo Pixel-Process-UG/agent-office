@@ -274,12 +274,24 @@ async function patchAgentInPostgres(agentId, patch) {
   })
 }
 
-async function updateAssignmentStatusInPostgres(assignmentId, status) {
+async function updateAssignmentStatusInPostgres(assignmentId, status, result) {
+  const setClauses = [`status = ${sqlString(status)}`, 'updated_at = now()']
+  if (typeof result === 'string') {
+    setClauses.push(`result = ${sqlString(result)}`)
+  }
   await runPsql(`
     update office_assignments
-    set status = ${sqlString(status)}, updated_at = now()
+    set ${setClauses.join(', ')}
     where id = ${sqlString(assignmentId)};
   `)
+  if (status === 'done' && result) {
+    await appendActivityInPostgres({
+      id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      kind: 'assignment',
+      text: `Task completed with result`,
+      agentId: null,
+    })
+  }
 }
 
 async function createAssignmentInPostgres(input) {
@@ -396,8 +408,14 @@ const server = http.createServer(async (req, res) => {
       if (!raw.status || !ASSIGNMENT_STATUSES.includes(raw.status)) {
         json(res, 400, { error: `Invalid status. Must be one of: ${ASSIGNMENT_STATUSES.join(', ')}` }); return
       }
+      if (raw.result !== undefined && raw.status !== 'done') {
+        json(res, 400, { error: 'result can only be provided when status is done' }); return
+      }
+      if (raw.result !== undefined && typeof raw.result === 'string' && raw.result.length > MAX_BRIEF_LEN) {
+        json(res, 400, { error: 'result too long (max 2000 chars)' }); return
+      }
       if (await postgresAvailable()) {
-        await updateAssignmentStatusInPostgres(assignPatchMatch[1], raw.status)
+        await updateAssignmentStatusInPostgres(assignPatchMatch[1], raw.status, raw.result)
         json(res, 200, { ok: true, source: 'postgres' })
       } else {
         await withLock(() => {
@@ -406,7 +424,22 @@ const server = http.createServer(async (req, res) => {
           const assignment = state.assignments.find(a => a.id === assignPatchMatch[1])
           if (!assignment) { json(res, 404, { error: 'Assignment not found' }); return }
           assignment.status = raw.status
+          if (typeof raw.result === 'string') {
+            assignment.result = raw.result
+            assignment.resultAction = 'visible'
+          }
           state.lastUpdatedAt = new Date().toISOString()
+          if (raw.status === 'done' && raw.result) {
+            if (!state.activity) state.activity = []
+            state.activity.unshift({
+              id: `act-${Date.now()}`,
+              kind: 'assignment',
+              text: `Task "${assignment.taskTitle}" completed with result`,
+              agentId: assignment.targetAgentId,
+              createdAt: new Date().toISOString()
+            })
+            state.activity = state.activity.slice(0, 100)
+          }
           writeState(state)
           json(res, 200, { ok: true, assignment, source: 'file' })
         })
@@ -486,6 +519,50 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
       console.error('Error handling POST /api/office/assign', e)
       json(res, 500, { error: `Assignment failed: ${e.message}` })
+    }
+    return
+  }
+
+  // POST /api/office/result/:assignmentId/save — save result to local file
+  const resultSaveMatch = url.pathname.match(/^\/api\/office\/result\/([a-z0-9-]+)\/save$/)
+  if (resultSaveMatch && req.method === 'POST') {
+    try {
+      const assignmentId = resultSaveMatch[1]
+      let assignment = null
+      if (await postgresAvailable()) {
+        const raw = await runPsql(`select task_title, target_agent_id, priority, result from office_assignments where id = ${sqlString(assignmentId)};`)
+        if (!raw) { json(res, 404, { error: 'Assignment not found' }); return }
+        const parts = raw.split('|')
+        assignment = { taskTitle: parts[0], targetAgentId: parts[1], priority: parts[2], result: parts[3] }
+      } else {
+        const state = readState()
+        assignment = (state.assignments || []).find(a => a.id === assignmentId)
+      }
+      if (!assignment) { json(res, 404, { error: 'Assignment not found' }); return }
+      if (!assignment.result) { json(res, 400, { error: 'No result to save' }); return }
+      const resultsDir = path.join(__dirname, 'state/results')
+      if (!fs.existsSync(resultsDir)) fs.mkdirSync(resultsDir, { recursive: true })
+      const filePath = path.join(resultsDir, `${assignmentId}.md`)
+      const content = `# ${assignment.taskTitle}\n\n**Agent:** ${assignment.targetAgentId}\n**Completed:** ${new Date().toISOString()}\n**Priority:** ${assignment.priority}\n\n## Result\n\n${assignment.result}\n`
+      fs.writeFileSync(filePath, content)
+      if (await postgresAvailable()) {
+        await runPsql(`update office_assignments set result_saved_at = now(), result_action = 'saved' where id = ${sqlString(assignmentId)};`)
+      } else {
+        await withLock(() => {
+          const state = readState()
+          const a = (state.assignments || []).find(x => x.id === assignmentId)
+          if (a) {
+            a.resultSavedAt = new Date().toISOString()
+            a.resultAction = 'saved'
+            state.lastUpdatedAt = new Date().toISOString()
+            writeState(state)
+          }
+        })
+      }
+      json(res, 200, { ok: true, path: filePath })
+    } catch (e) {
+      console.error('Error handling POST /api/office/result/:id/save', e)
+      json(res, 500, { error: 'Failed to save result' })
     }
     return
   }
