@@ -39,13 +39,13 @@ describe('OfficeProvider', () => {
     expect(screen.getByText('Child content')).toBeInTheDocument()
   })
 
-  it('useOffice returns valid state', () => {
+  it('useOffice returns valid state with empty agents', () => {
     render(
       <OfficeProvider>
         <TestConsumer />
       </OfficeProvider>
     )
-    expect(Number(screen.getByTestId('agent-count').textContent)).toBeGreaterThan(0)
+    expect(Number(screen.getByTestId('agent-count').textContent)).toBe(0)
     expect(Number(screen.getByTestId('room-count').textContent)).toBeGreaterThan(0)
     expect(screen.getByTestId('data-source').textContent).toBe('seed')
   })
@@ -67,13 +67,13 @@ describe('OfficeProvider', () => {
     expect(screen.getByTestId('has-delete').textContent).toBe('function')
   })
 
-  it('pre-selects forge agent', () => {
+  it('no agent selected initially', () => {
     render(
       <OfficeProvider>
         <TestConsumer />
       </OfficeProvider>
     )
-    expect(screen.getByTestId('selected').textContent).toBe('forge')
+    expect(screen.getByTestId('selected').textContent).toBe('none')
   })
 })
 
@@ -125,10 +125,11 @@ describe('validateSnapshot logic', () => {
     if (data == null || typeof data !== 'object') return false
     const d = data as Record<string, unknown>
     if (!Array.isArray(d.agents) || !Array.isArray(d.rooms)) return false
-    if (d.agents.length === 0) return false
-    const first = d.agents[0] as Record<string, unknown>
-    if (typeof first.id !== 'string' || typeof first.name !== 'string') return false
-    if (!VALID_PRESENCE.has(first.presence as string)) return false
+    if (d.agents.length > 0) {
+      const first = d.agents[0] as Record<string, unknown>
+      if (typeof first.id !== 'string' || typeof first.name !== 'string') return false
+      if (!VALID_PRESENCE.has(first.presence as string)) return false
+    }
     if (d.workdayPolicy == null || typeof d.workdayPolicy !== 'object') return false
     const wp = d.workdayPolicy as Record<string, unknown>
     if (typeof wp.timezone !== 'string') return false
@@ -147,8 +148,12 @@ describe('validateSnapshot logic', () => {
     expect(validateSnapshot({ rooms: [] })).toBe(false)
   })
 
-  it('rejects empty agents array', () => {
-    expect(validateSnapshot({ agents: [], rooms: [] })).toBe(false)
+  it('accepts empty agents array', () => {
+    expect(validateSnapshot({
+      agents: [],
+      rooms: [],
+      workdayPolicy: { timezone: 'Europe/Berlin' }
+    })).toBe(true)
   })
 
   it('rejects invalid agent shape', () => {
@@ -167,7 +172,7 @@ describe('validateSnapshot logic', () => {
     })).toBe(false)
   })
 
-  it('accepts valid snapshot', () => {
+  it('accepts valid snapshot with agents', () => {
     expect(validateSnapshot({
       agents: [{ id: 'x', name: 'X', presence: 'active' }],
       rooms: [],

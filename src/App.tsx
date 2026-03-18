@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
 import { type PresenceState, type Room } from './data'
 import { useOffice, type OfficeAgent, type AgentCreateInput, type AgentUpdateInput } from './office-provider'
 import { characterSprites, getCharacterSprite, getSpriteAnimData, type CharacterSpriteSet, type SpriteAnimData } from './world'
+import { WelcomeOnboarding } from './WelcomeOnboarding'
 
 const OFFICE_MAP = '/assets/pixelart/Office Tileset/Office Designs/Office Level 4.png'
 const MAP_NATIVE_W = 640
@@ -94,7 +95,6 @@ function AgentSprite({ agent, onClick, selected, hovered, onHover }: {
   const [spriteFailed, setSpriteFailed] = useState(false)
   const room = rooms.find(r => r.id === agent.roomId)
   const seat = agentSeats[agent.id]
-  if (!room || !seat) return null
 
   const spriteSet = characterSprites[agent.id]
   const spriteUrl = spriteSet ? getCharacterSprite(spriteSet, agent.effectivePresence) : null
@@ -104,6 +104,8 @@ function AgentSprite({ agent, onClick, selected, hovered, onHover }: {
   const color = presenceColors[agent.effectivePresence]
   const isIdle = agent.effectivePresence === 'off_hours' || agent.effectivePresence === 'paused'
   const showBubble = selected || hovered
+
+  if (!room || !seat) return null
 
   return (
     <div
@@ -616,6 +618,7 @@ export function App() {
           {sideTab === 'roster' && (
             <div className="agent-roster" role="tabpanel">
               <button className="add-agent-btn" onClick={() => { setShowAgentForm('create'); selectAgent(null) }} aria-label="Add agent">+ Add Agent</button>
+              {agents.length === 0 && <p className="feed-empty">No agents yet. Add one to get started.</p>}
               {agents.map(agent => {
                 const color = presenceColors[agent.effectivePresence]
                 const room = rooms.find(r => r.id === agent.roomId)
@@ -780,6 +783,7 @@ export function App() {
           </div>
         </aside>
       </main>
+      {agents.length === 0 && dataSource !== 'seed' && <WelcomeOnboarding />}
     </div>
   )
 }

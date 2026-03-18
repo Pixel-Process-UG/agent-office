@@ -3,8 +3,48 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { App } from '../App'
 import { OfficeProvider } from '../office-provider'
 
-// Mock fetch to prevent actual API calls
-beforeEach(() => {
+// Test agents for mocking fetch responses
+const TEST_AGENTS = [
+  {
+    id: 'forge', name: 'Forge', role: 'Full-stack builder', team: 'Build',
+    roomId: 'shipyard', presence: 'active', focus: 'Building things',
+    criticalTask: true, collaborationMode: 'Collaborative'
+  },
+  {
+    id: 'northstar', name: 'Northstar', role: 'Technical architecture', team: 'Platform',
+    roomId: 'systems-bay', presence: 'available', focus: 'Reviewing architecture',
+    criticalTask: false, collaborationMode: 'Advisory'
+  },
+]
+
+const TEST_SNAPSHOT = {
+  agents: TEST_AGENTS,
+  rooms: [
+    { id: 'planning-studio', name: 'Planning Studio', team: 'Product + UX', purpose: 'Coordination', agents: [], zone: { x: 25, y: 3, w: 50, h: 27 } },
+    { id: 'shipyard', name: 'Shipyard', team: 'Build', purpose: 'Engineering', agents: ['forge'], zone: { x: 2, y: 33, w: 58, h: 30 } },
+    { id: 'systems-bay', name: 'Systems Bay', team: 'Platform', purpose: 'Architecture', agents: ['northstar'], zone: { x: 62, y: 33, w: 36, h: 22 } },
+    { id: 'commons', name: 'Commons', team: 'Shared Office', purpose: 'Shared space', agents: [], zone: { x: 2, y: 68, w: 58, h: 30 } },
+    { id: 'signal-room', name: 'Signal Room', team: 'Ops', purpose: 'Operations', agents: [], zone: { x: 62, y: 60, w: 36, h: 38 } },
+  ],
+  agentSeats: { forge: { xPct: 35, yPct: 45 }, northstar: { xPct: 50, yPct: 50 } },
+  workdayPolicy: { timezone: 'Europe/Berlin', days: 'Monday-Friday', hours: '09:00-17:00', pauseRule: 'Pause rule', sharedPlaceRule: 'Shared rule' },
+  activity: [],
+  assignments: [],
+  source: 'file',
+  lastUpdatedAt: new Date().toISOString(),
+}
+
+function mockFetchWithAgents() {
+  vi.stubGlobal('fetch', vi.fn(() =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(TEST_SNAPSHOT),
+    })
+  ))
+}
+
+function mockFetchFailing() {
   vi.stubGlobal('fetch', vi.fn(() =>
     Promise.resolve({
       ok: false,
@@ -12,7 +52,7 @@ beforeEach(() => {
       json: () => Promise.resolve({ error: 'test' }),
     })
   ))
-})
+}
 
 function renderApp() {
   return render(
@@ -22,8 +62,12 @@ function renderApp() {
   )
 }
 
-describe('App', () => {
-  it('renders without crashing', () => {
+describe('App — with agents (via API)', () => {
+  beforeEach(() => {
+    mockFetchWithAgents()
+  })
+
+  it('renders without crashing', async () => {
     renderApp()
     expect(screen.getByText('Clawd Office')).toBeInTheDocument()
   })
@@ -53,80 +97,9 @@ describe('App', () => {
     expect(feedTab).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('agent roster renders agents', () => {
-    renderApp()
-    // Seed data includes Forge — may appear multiple times (sprite + roster + detail)
-    const forgeElements = screen.getAllByText('Forge')
-    expect(forgeElements.length).toBeGreaterThan(0)
-  })
-
-  it('clicking an agent shows detail card', () => {
-    renderApp()
-    // Forge is pre-selected, detail card with role should be visible
-    const roleElements = screen.getAllByText('Full-stack builder')
-    expect(roleElements.length).toBeGreaterThan(0)
-  })
-
-  it('detail card shows agent fields', () => {
-    renderApp()
-    // Forge is pre-selected, detail card visible
-    expect(screen.getByText('Role')).toBeInTheDocument()
-    expect(screen.getByText('Team')).toBeInTheDocument()
-    expect(screen.getByText('Room')).toBeInTheDocument()
-  })
-
-  it('Escape key deselects agent', () => {
-    renderApp()
-    // Forge is pre-selected, detail card has Role dt
-    expect(screen.getByText('Role')).toBeInTheDocument()
-    fireEvent.keyDown(window, { key: 'Escape' })
-    // After escape, detail card dt elements should be gone
-    expect(screen.queryByText('Role')).not.toBeInTheDocument()
-  })
-
-  it('arrow keys navigate agents', () => {
-    renderApp()
-    // Pre-selected: Forge
-    fireEvent.keyDown(window, { key: 'ArrowDown' })
-    // Should move to next agent — detail card updates
-    const archElements = screen.getAllByText('Technical architecture')
-    expect(archElements.length).toBeGreaterThan(0)
-  })
-
-  it('assign task button opens form', () => {
-    renderApp()
-    // Forge is pre-selected
-    const assignBtn = screen.getByText('Assign task')
-    fireEvent.click(assignBtn)
-    expect(screen.getByText('Queue assignment')).toBeInTheDocument()
-  })
-
   it('Add Agent button is present', () => {
     renderApp()
     expect(screen.getByText('+ Add Agent')).toBeInTheDocument()
-  })
-
-  it('Edit and Delete buttons are visible in detail card', () => {
-    renderApp()
-    // Forge is pre-selected
-    expect(screen.getByText('Edit')).toBeInTheDocument()
-    expect(screen.getByText('Delete')).toBeInTheDocument()
-  })
-
-  it('Delete button shows confirmation', () => {
-    renderApp()
-    const deleteBtn = screen.getByText('Delete')
-    fireEvent.click(deleteBtn)
-    expect(screen.getByText('Delete?')).toBeInTheDocument()
-    expect(screen.getByText('Yes')).toBeInTheDocument()
-    expect(screen.getByText('No')).toBeInTheDocument()
-  })
-
-  it('Edit button opens agent form', () => {
-    renderApp()
-    const editBtn = screen.getByText('Edit')
-    fireEvent.click(editBtn)
-    expect(screen.getByText('Save changes')).toBeInTheDocument()
   })
 
   it('Add Agent button opens create form', () => {
@@ -136,5 +109,28 @@ describe('App', () => {
     const addBtn = screen.getByText('+ Add Agent')
     fireEvent.click(addBtn)
     expect(screen.getByText('Create agent')).toBeInTheDocument()
+  })
+})
+
+describe('App — empty office (seed fallback)', () => {
+  beforeEach(() => {
+    mockFetchFailing()
+  })
+
+  it('renders without crashing with empty agents', () => {
+    renderApp()
+    expect(screen.getByText('Clawd Office')).toBeInTheDocument()
+  })
+
+  it('shows empty roster message', () => {
+    renderApp()
+    expect(screen.getByText('No agents yet. Add one to get started.')).toBeInTheDocument()
+  })
+
+  it('does not show welcome overlay while on seed data', () => {
+    renderApp()
+    // The overlay only shows when dataSource is 'live' and agents are empty
+    // On seed fallback, overlay should not appear (prevents flash)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

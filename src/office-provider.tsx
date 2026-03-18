@@ -84,11 +84,12 @@ function validateSnapshot(data: unknown): data is ApiSnapshot {
   if (data == null || typeof data !== 'object') return false
   const d = data as Record<string, unknown>
   if (!Array.isArray(d.agents) || !Array.isArray(d.rooms)) return false
-  if (d.agents.length === 0) return false
-  // Spot-check first agent
-  const first = d.agents[0] as Record<string, unknown>
-  if (typeof first.id !== 'string' || typeof first.name !== 'string') return false
-  if (!isValidPresence(first.presence)) return false
+  // Spot-check first agent if present
+  if (d.agents.length > 0) {
+    const first = d.agents[0] as Record<string, unknown>
+    if (typeof first.id !== 'string' || typeof first.name !== 'string') return false
+    if (!isValidPresence(first.presence)) return false
+  }
   // Check rooms
   const firstRoom = d.rooms[0] as Record<string, unknown> | undefined
   if (firstRoom && (typeof firstRoom.id !== 'string' || !firstRoom.zone)) return false
@@ -110,7 +111,7 @@ function buildAgents(source: AgentCard[], within: boolean): OfficeAgent[] {
 }
 
 const INITIAL_ACTIVITY: ActivityItem[] = [
-  { id: 'boot-1', kind: 'system', text: 'Office opened. Seed state loaded.', createdAt: new Date().toISOString() },
+  { id: 'boot-1', kind: 'system', text: 'Office opened. Waiting for first agent.', createdAt: new Date().toISOString() },
 ]
 
 interface ApiSnapshot {
@@ -156,7 +157,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [currentPolicy, setCurrentPolicy] = useState<WorkdayPolicy>(seedPolicy)
   const [dataSource, setDataSource] = useState<'seed' | 'live'>('seed')
   const [connectionError, setConnectionError] = useState<string | null>(null)
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>('forge')
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const [berlinTimeLabel, setBerlinTimeLabel] = useState(getBerlinNow(seedPolicy.timezone).label)
   const [withinWorkday, setWithinWorkday] = useState(isWithinWorkday(seedPolicy.timezone))
   const [agents, setAgents] = useState<OfficeAgent[]>(() => buildAgents(seedAgents, isWithinWorkday(seedPolicy.timezone)))

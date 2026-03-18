@@ -13,34 +13,13 @@ import {
 const VALID_PRESENCE: PresenceState[] = ['off_hours', 'available', 'active', 'in_meeting', 'paused', 'blocked']
 
 describe('data — agents', () => {
-  it('exports a non-empty array of agents', () => {
-    expect(agents.length).toBeGreaterThan(0)
+  it('exports an empty array of agents by default', () => {
+    expect(agents).toEqual([])
   })
 
-  it('every agent has required fields', () => {
-    for (const agent of agents) {
-      expect(agent.id).toBeTruthy()
-      expect(agent.name).toBeTruthy()
-      expect(agent.role).toBeTruthy()
-      expect(agent.team).toBeTruthy()
-      expect(agent.roomId).toBeTruthy()
-      expect(VALID_PRESENCE).toContain(agent.presence)
-      expect(agent.focus).toBeTruthy()
-      expect(typeof agent.criticalTask).toBe('boolean')
-      expect(agent.collaborationMode).toBeTruthy()
-    }
-  })
-
-  it('agent IDs are unique', () => {
+  it('agent IDs are unique (vacuously true when empty)', () => {
     const ids = agents.map(a => a.id)
     expect(new Set(ids).size).toBe(ids.length)
-  })
-
-  it('every agent references an existing room', () => {
-    const roomIds = new Set(rooms.map(r => r.id))
-    for (const agent of agents) {
-      expect(roomIds.has(agent.roomId)).toBe(true)
-    }
   })
 })
 
@@ -64,6 +43,12 @@ describe('data — rooms', () => {
     }
   })
 
+  it('room agent arrays are empty by default', () => {
+    for (const room of rooms) {
+      expect(room.agents).toEqual([])
+    }
+  })
+
   it('room IDs are unique', () => {
     const ids = rooms.map(r => r.id)
     expect(new Set(ids).size).toBe(ids.length)
@@ -80,19 +65,8 @@ describe('data — rooms', () => {
 })
 
 describe('data — agentSeats', () => {
-  it('every agent has a seat entry', () => {
-    for (const agent of agents) {
-      expect(agentSeats[agent.id]).toBeDefined()
-    }
-  })
-
-  it('seat positions are within 0-100% range', () => {
-    for (const [, seat] of Object.entries(agentSeats)) {
-      expect(seat.xPct).toBeGreaterThanOrEqual(0)
-      expect(seat.xPct).toBeLessThanOrEqual(100)
-      expect(seat.yPct).toBeGreaterThanOrEqual(0)
-      expect(seat.yPct).toBeLessThanOrEqual(100)
-    }
+  it('is empty by default', () => {
+    expect(Object.keys(agentSeats)).toHaveLength(0)
   })
 })
 

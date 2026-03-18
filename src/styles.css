@@ -413,6 +413,27 @@ button:focus:not(:focus-visible) { outline: none; }
 }
 .agent-form-checkbox input { accent-color: #95d8ff; }
 
+/* ── Welcome onboarding overlay ──────────────────── */
+.welcome-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.welcome-card {
+  max-width: 480px; width: 100%;
+  background: var(--surface); border: 2px solid var(--border);
+  padding: 24px;
+}
+.welcome-title {
+  font-family: var(--font); font-size: 12px; color: #95d8ff;
+  text-align: center; margin-bottom: 10px; letter-spacing: 0.05em;
+}
+.welcome-subtitle {
+  font-size: 12px; color: var(--text2); text-align: center;
+  margin-bottom: 16px; line-height: 1.5;
+}
+
 /* ── Responsive ───────────────────────────────────── */
 
 /* Tablet */

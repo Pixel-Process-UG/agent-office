@@ -442,18 +442,50 @@ const server = http.createServer(async (req, res) => {
       if (input.taskBrief && String(input.taskBrief).length > MAX_BRIEF_LEN) {
         json(res, 400, { error: 'taskBrief too long' }); return
       }
-      const persisted = await createAssignmentInPostgres(input)
-      const result = await runLinearBridge({
-        targetAgentId: String(input.targetAgentId),
-        taskTitle: String(input.taskTitle),
-        taskBrief: input.taskBrief ? String(input.taskBrief) : '',
-        priority: String(input.priority),
-        origin: 'office_ui'
-      })
-      json(res, 200, { ok: true, persisted, result, source: 'postgres' })
+      let persisted
+      if (await postgresAvailable()) {
+        persisted = await createAssignmentInPostgres(input)
+        persisted.source = 'postgres'
+      } else {
+        const assignment = {
+          id: `assignment-${Date.now()}`,
+          targetAgentId: String(input.targetAgentId),
+          taskTitle: String(input.taskTitle),
+          taskBrief: input.taskBrief ? String(input.taskBrief) : '',
+          priority: String(input.priority),
+          routingTarget: String(input.routingTarget),
+          status: 'queued',
+          createdAt: new Date().toISOString()
+        }
+        await withLock(() => {
+          const state = readState()
+          if (!state.assignments) state.assignments = []
+          state.assignments.push(assignment)
+          state.lastUpdatedAt = new Date().toISOString()
+          writeState(state)
+        })
+        persisted = { id: assignment.id, status: 'queued', source: 'file' }
+      }
+
+      let bridgeResult = null
+      if (fs.existsSync(LINEAR_BRIDGE)) {
+        try {
+          bridgeResult = await runLinearBridge({
+            targetAgentId: String(input.targetAgentId),
+            taskTitle: String(input.taskTitle),
+            taskBrief: input.taskBrief ? String(input.taskBrief) : '',
+            priority: String(input.priority),
+            origin: 'office_ui'
+          })
+        } catch (bridgeErr) {
+          console.warn('Linear bridge failed (assignment saved locally):', bridgeErr)
+        }
+      }
+
+      json(res, 200, { ok: true, persisted, bridgeResult })
     } catch (e) {
       console.error('Error handling POST /api/office/assign', e)
-      json(res, 400, { error: 'Invalid request body' })
+      json(res, 500, { error: `Assignment failed: ${e.message}` })
     }
     return
   }

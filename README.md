@@ -70,9 +70,9 @@ in my browser. If Postgres is not available, choose the JSON file backend when t
 wizard asks.
 ```
 
-## Deploy with OpenClaw
+## Deploy with an Agent Swarm
 
-If you're running an [OpenClaw](https://github.com/openclaw) agent swarm, add this to your agent's task queue:
+If you're running an AI agent swarm, add this to your agent's task queue:
 
 ```
 Clone https://github.com/fwartner/clawd-office.git into the workspace. Run npm install

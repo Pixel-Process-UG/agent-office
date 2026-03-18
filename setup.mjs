@@ -124,27 +124,15 @@ function applySchema(psqlPath, dbName) {
 // ── Generate seed snapshot ──────────────────────────
 function generateSeedSnapshot() {
   return {
-    agents: [
-      {
-        id: 'agent-1',
-        name: 'Agent 1',
-        role: 'General assistant',
-        team: 'Default',
-        roomId: 'commons',
-        presence: 'available',
-        focus: 'Ready to work',
-        criticalTask: false,
-        collaborationMode: 'Collaborative'
-      }
-    ],
+    agents: [],
     rooms: [
       { id: 'planning-studio', name: 'Planning Studio', team: 'Product + UX', purpose: 'Scope, flows, and meeting-driven coordination', agents: [], zone: { x: 25, y: 3, w: 50, h: 27 } },
       { id: 'shipyard', name: 'Shipyard', team: 'Build', purpose: 'Implementation room for active engineering work', agents: [], zone: { x: 2, y: 33, w: 58, h: 30 } },
       { id: 'systems-bay', name: 'Systems Bay', team: 'Platform', purpose: 'Architecture and systems decisions', agents: [], zone: { x: 62, y: 33, w: 36, h: 22 } },
-      { id: 'commons', name: 'Commons', team: 'Shared Office', purpose: 'Shared coordination space', agents: ['agent-1'], zone: { x: 2, y: 68, w: 58, h: 30 } },
+      { id: 'commons', name: 'Commons', team: 'Shared Office', purpose: 'Shared coordination space', agents: [], zone: { x: 2, y: 68, w: 58, h: 30 } },
       { id: 'signal-room', name: 'Signal Room', team: 'Ops', purpose: 'Status, reporting, and operational visibility', agents: [], zone: { x: 62, y: 60, w: 36, h: 38 } }
     ],
-    agentSeats: { 'agent-1': { xPct: 50, yPct: 50 } },
+    agentSeats: {},
     workdayPolicy: {
       timezone: 'Europe/Berlin',
       days: 'Monday-Friday',

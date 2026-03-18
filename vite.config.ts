@@ -213,18 +213,44 @@ function officeApiPlugin(): Plugin {
               res.end(JSON.stringify({ error: 'taskBrief too long' }))
               return
             }
-            const result = await runLinearBridge({
+            const assignment = {
+              id: `assignment-${Date.now()}`,
               targetAgentId: String(input.targetAgentId),
               taskTitle: String(input.taskTitle),
               taskBrief: input.taskBrief ? String(input.taskBrief) : '',
               priority: String(input.priority),
-              origin: 'office_ui'
+              routingTarget: String(input.routingTarget),
+              status: 'queued',
+              createdAt: new Date().toISOString()
+            }
+            await withLock(() => {
+              const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'))
+              if (!state.assignments) state.assignments = []
+              state.assignments.push(assignment)
+              state.lastUpdatedAt = new Date().toISOString()
+              fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2))
             })
+
+            let bridgeResult: unknown = null
+            if (fs.existsSync(LINEAR_BRIDGE)) {
+              try {
+                bridgeResult = await runLinearBridge({
+                  targetAgentId: assignment.targetAgentId,
+                  taskTitle: assignment.taskTitle,
+                  taskBrief: assignment.taskBrief,
+                  priority: assignment.priority,
+                  origin: 'office_ui'
+                })
+              } catch (bridgeErr) {
+                console.warn('Linear bridge failed (assignment saved locally):', bridgeErr)
+              }
+            }
+
             res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ ok: true, result }))
+            res.end(JSON.stringify({ ok: true, assignment, bridgeResult }))
           } catch (err) {
-            res.statusCode = 400
-            res.end(JSON.stringify({ error: String(err) }))
+            res.statusCode = 500
+            res.end(JSON.stringify({ error: `Assignment failed: ${String(err)}` }))
           }
           return
         }

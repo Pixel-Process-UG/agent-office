@@ -1,70 +1,15 @@
 {
   "agents": [
     {
-      "id": "forge",
-      "name": "Forge",
-      "role": "Full-stack builder",
-      "team": "Build",
-      "roomId": "shipyard",
-      "presence": "active",
-      "focus": "Building the pixel-art virtual office",
-      "criticalTask": true,
-      "collaborationMode": "Shipping implementation in the shared office shell"
-    },
-    {
-      "id": "northstar",
-      "name": "Northstar",
-      "role": "Technical architecture",
-      "team": "Platform",
-      "roomId": "systems-bay",
-      "presence": "active",
-      "focus": "Working on: Finish your tasks on Linear.",
-      "criticalTask": false,
-      "collaborationMode": "Advises structure used by every room"
-    },
-    {
-      "id": "prism",
-      "name": "Prism",
-      "role": "Product scope",
-      "team": "Product",
-      "roomId": "planning-studio",
-      "presence": "active",
-      "focus": "Working on: Finish your tasks on Linear.",
-      "criticalTask": true,
-      "collaborationMode": "Aligns priorities across the office"
-    },
-    {
-      "id": "lumen",
-      "name": "Lumen",
-      "role": "UX and interface structure",
-      "team": "Experience",
-      "roomId": "planning-studio",
-      "presence": "active",
-      "focus": "Making presence and navigation readable at a glance",
-      "criticalTask": true,
-      "collaborationMode": "Shapes how the whole office feels to inhabit"
-    },
-    {
-      "id": "quarry",
-      "name": "Quarry",
-      "role": "Reporting and metrics",
-      "team": "Operations",
+      "id": "polly",
+      "name": "Polly",
+      "role": "CEO",
+      "team": "Management",
       "roomId": "signal-room",
       "presence": "active",
-      "focus": "Working on: Finish your tasks on Linear.",
-      "criticalTask": false,
-      "collaborationMode": "Surfaces metrics when they matter"
-    },
-    {
-      "id": "morrow",
-      "name": "Morrow",
-      "role": "Operational process fit",
-      "team": "Operations",
-      "roomId": "signal-room",
-      "presence": "active",
-      "focus": "Working on: Finish your tasks on Linear.",
+      "focus": "Working on: Contact my Company",
       "criticalTask": true,
-      "collaborationMode": "Keeps the office behavior operationally coherent"
+      "collaborationMode": ""
     }
   ],
   "rooms": [
@@ -73,10 +18,7 @@
       "name": "Planning Studio",
       "team": "Product + UX",
       "purpose": "Scope, flows, and meeting-driven coordination",
-      "agents": [
-        "prism",
-        "lumen"
-      ],
+      "agents": [],
       "zone": {
         "x": 25,
         "y": 3,
@@ -89,9 +31,7 @@
       "name": "Shipyard",
       "team": "Build",
       "purpose": "Implementation room for active engineering work",
-      "agents": [
-        "forge"
-      ],
+      "agents": [],
       "zone": {
         "x": 2,
         "y": 33,
@@ -104,9 +44,7 @@
       "name": "Systems Bay",
       "team": "Platform",
       "purpose": "Architecture and systems decisions that support the whole office",
-      "agents": [
-        "northstar"
-      ],
+      "agents": [],
       "zone": {
         "x": 62,
         "y": 33,
@@ -132,10 +70,7 @@
       "name": "Signal Room",
       "team": "Ops",
       "purpose": "Status, reporting, decisions, and operational visibility",
-      "agents": [
-        "quarry",
-        "morrow"
-      ],
+      "agents": [],
       "zone": {
         "x": 62,
         "y": 60,
@@ -145,250 +80,131 @@
     }
   ],
   "agentSeats": {
-    "forge": {
-      "xPct": 35,
-      "yPct": 45
-    },
-    "northstar": {
+    "polly": {
       "xPct": 50,
       "yPct": 50
-    },
-    "prism": {
-      "xPct": 35,
-      "yPct": 50
-    },
-    "lumen": {
-      "xPct": 65,
-      "yPct": 50
-    },
-    "quarry": {
-      "xPct": 35,
-      "yPct": 45
-    },
-    "morrow": {
-      "xPct": 65,
-      "yPct": 55
     }
   },
   "workdayPolicy": {
     "timezone": "Europe/Berlin",
     "days": "Monday-Friday",
     "hours": "09:00-17:00",
-    "pauseRule": "Agents should stay available for work by default; do not move agents into paused as a routine idle state.",
+    "pauseRule": "After non-critical tasks, agents should move to paused to save tokens until the next meaningful task arrives.",
     "sharedPlaceRule": "The office is the shared place where all agents work together, coordinate by room, and expose their current state."
   },
   "activity": [
     {
-      "id": "act-1773778172998",
+      "id": "act-1773827577680",
       "kind": "assignment",
-      "text": "Morrow is actively working on \"Finish your tasks on Linear.\"",
-      "agentId": "morrow",
-      "createdAt": "2026-03-17T20:09:32.998Z"
+      "text": "Polly is actively working on \"Contact my Company\"",
+      "agentId": "polly",
+      "createdAt": "2026-03-18T09:52:57.680Z"
     },
     {
-      "id": "act-1773778172996",
+      "id": "act-1773827577677",
       "kind": "assignment",
-      "text": "Morrow is actively working on \"Finish your tasks on Linear.\"",
-      "agentId": "morrow",
-      "createdAt": "2026-03-17T20:09:32.996Z"
+      "text": "Polly is actively working on \"Contact my Company\"",
+      "agentId": "polly",
+      "createdAt": "2026-03-18T09:52:57.677Z"
     },
     {
-      "id": "act-1773778167009",
-      "kind": "assignment",
-      "text": "Quarry is actively working on \"Finish your tasks on Linear.\"",
-      "agentId": "quarry",
-      "createdAt": "2026-03-17T20:09:27.009Z"
-    },
-    {
-      "id": "act-1773778167006",
-      "kind": "assignment",
-      "text": "Quarry is actively working on \"Finish your tasks on Linear.\"",
-      "agentId": "quarry",
-      "createdAt": "2026-03-17T20:09:27.006Z"
-    },
-    {
-      "id": "act-1773778167005",
+      "id": "act-1773827571675",
       "kind": "system",
-      "text": "Morrow picked up \"Finish your tasks on Linear.\"",
-      "agentId": "morrow",
-      "createdAt": "2026-03-17T20:09:27.005Z"
+      "text": "Polly picked up \"Contact my Company\"",
+      "agentId": "polly",
+      "createdAt": "2026-03-18T09:52:51.675Z"
     },
     {
-      "id": "act-1773778166997",
+      "id": "act-1773827571672",
       "kind": "system",
-      "text": "Morrow picked up \"Finish your tasks on Linear.\"",
-      "agentId": "morrow",
-      "createdAt": "2026-03-17T20:09:26.997Z"
+      "text": "Polly picked up \"Contact my Company\"",
+      "agentId": "polly",
+      "createdAt": "2026-03-18T09:52:51.672Z"
     },
     {
-      "id": "act-1773778163380",
+      "id": "act-1773827567934",
       "kind": "assignment",
-      "text": "Assigned \"Finish your tasks on Linear.\" to Morrow",
-      "agentId": "morrow",
-      "createdAt": "2026-03-17T20:09:23.380Z"
+      "text": "Assigned \"Contact my Company\" to Polly",
+      "agentId": "polly",
+      "createdAt": "2026-03-18T09:52:47.934Z"
     },
     {
-      "id": "act-1773778163378",
-      "kind": "assignment",
-      "text": "Assigned \"Finish your tasks on Linear.\" to Morrow",
-      "agentId": "morrow",
-      "createdAt": "2026-03-17T20:09:23.378Z"
-    },
-    {
-      "id": "act-1773778162934",
+      "id": "act-1773827390222",
       "kind": "system",
-      "text": "Quarry picked up \"Finish your tasks on Linear.\"",
-      "agentId": "quarry",
-      "createdAt": "2026-03-17T20:09:22.934Z"
+      "text": "Agent Polly updated",
+      "agentId": "polly",
+      "createdAt": "2026-03-18T09:49:50.222Z"
     },
     {
-      "id": "act-1773778160909",
+      "id": "act-1773827347257",
+      "kind": "assignment",
+      "text": "Polly is actively working on \"Find everything about my company\"",
+      "agentId": "polly",
+      "createdAt": "2026-03-18T09:49:07.257Z"
+    },
+    {
+      "id": "act-1773827347255",
+      "kind": "assignment",
+      "text": "Polly is actively working on \"Find everything about my company\"",
+      "agentId": "polly",
+      "createdAt": "2026-03-18T09:49:07.255Z"
+    },
+    {
+      "id": "act-1773827343250",
       "kind": "system",
-      "text": "Quarry picked up \"Finish your tasks on Linear.\"",
-      "agentId": "quarry",
-      "createdAt": "2026-03-17T20:09:20.909Z"
+      "text": "Polly picked up \"Find everything about my company\"",
+      "agentId": "polly",
+      "createdAt": "2026-03-18T09:49:03.250Z"
     },
     {
-      "id": "act-1773778157423",
-      "kind": "assignment",
-      "text": "Assigned \"Finish your tasks on Linear.\" to Quarry",
-      "agentId": "quarry",
-      "createdAt": "2026-03-17T20:09:17.423Z"
-    },
-    {
-      "id": "act-1773778157419",
-      "kind": "assignment",
-      "text": "Assigned \"Finish your tasks on Linear.\" to Quarry",
-      "agentId": "quarry",
-      "createdAt": "2026-03-17T20:09:17.419Z"
-    },
-    {
-      "id": "act-1773778146936",
-      "kind": "assignment",
-      "text": "Northstar is actively working on \"Finish your tasks on Linear.\"",
-      "agentId": "northstar",
-      "createdAt": "2026-03-17T20:09:06.936Z"
-    },
-    {
-      "id": "act-1773778146933",
-      "kind": "assignment",
-      "text": "Northstar is actively working on \"Finish your tasks on Linear.\"",
-      "agentId": "northstar",
-      "createdAt": "2026-03-17T20:09:06.933Z"
-    },
-    {
-      "id": "act-1773778142829",
+      "id": "act-1773827341240",
       "kind": "system",
-      "text": "Northstar picked up \"Finish your tasks on Linear.\"",
-      "agentId": "northstar",
-      "createdAt": "2026-03-17T20:09:02.829Z"
+      "text": "Polly picked up \"Find everything about my company\"",
+      "agentId": "polly",
+      "createdAt": "2026-03-18T09:49:01.240Z"
     },
     {
-      "id": "act-1773778140804",
+      "id": "act-1773827338199",
+      "kind": "assignment",
+      "text": "Assigned \"Find everything about my company\" to Polly",
+      "agentId": "polly",
+      "createdAt": "2026-03-18T09:48:58.199Z"
+    },
+    {
+      "id": "act-1773827246413",
       "kind": "system",
-      "text": "Northstar picked up \"Finish your tasks on Linear.\"",
-      "agentId": "northstar",
-      "createdAt": "2026-03-17T20:09:00.804Z"
+      "text": "Agent Polly created",
+      "createdAt": "2026-03-18T09:47:26.413Z"
     },
     {
-      "id": "act-1773778137142",
-      "kind": "assignment",
-      "text": "Assigned \"Finish your tasks on Linear.\" to Northstar",
-      "agentId": "northstar",
-      "createdAt": "2026-03-17T20:08:57.142Z"
-    },
-    {
-      "id": "act-1773778137134",
-      "kind": "assignment",
-      "text": "Assigned \"Finish your tasks on Linear.\" to Northstar",
-      "agentId": "northstar",
-      "createdAt": "2026-03-17T20:08:57.134Z"
-    },
-    {
-      "id": "act-1773778122819",
-      "kind": "assignment",
-      "text": "Prism is actively working on \"Finish your tasks on Linear.\"",
-      "agentId": "prism",
-      "createdAt": "2026-03-17T20:08:42.819Z"
-    },
-    {
-      "id": "act-1773778122816",
-      "kind": "assignment",
-      "text": "Prism is actively working on \"Finish your tasks on Linear.\"",
-      "agentId": "prism",
-      "createdAt": "2026-03-17T20:08:42.816Z"
-    },
-    {
-      "id": "act-1773778118757",
+      "id": "boot-1",
       "kind": "system",
-      "text": "Prism picked up \"Finish your tasks on Linear.\"",
-      "agentId": "prism",
-      "createdAt": "2026-03-17T20:08:38.757Z"
-    },
-    {
-      "id": "act-1773778118743",
-      "kind": "system",
-      "text": "Prism picked up \"Finish your tasks on Linear.\"",
-      "agentId": "prism",
-      "createdAt": "2026-03-17T20:08:38.743Z"
-    },
-    {
-      "id": "act-1773778114328",
-      "kind": "assignment",
-      "text": "Assigned \"Finish your tasks on Linear.\" to Prism",
-      "agentId": "prism",
-      "createdAt": "2026-03-17T20:08:34.327Z"
-    },
-    {
-      "id": "act-1773778114323",
-      "kind": "assignment",
-      "text": "Assigned \"Finish your tasks on Linear.\" to Prism",
-      "agentId": "prism",
-      "createdAt": "2026-03-17T20:08:34.323Z"
+      "text": "Office opened. Waiting for first agent.",
+      "createdAt": "2026-03-18T10:00:00.000Z"
     }
   ],
   "assignments": [
     {
-      "id": "assign-1773778163380",
-      "targetAgentId": "morrow",
-      "taskTitle": "Finish your tasks on Linear.",
-      "taskBrief": "Finish your tasks on Linear.",
-      "priority": "high",
+      "id": "assignment-1773827338201",
+      "targetAgentId": "polly",
+      "taskTitle": "Find everything about my company",
+      "taskBrief": "My company is pixel & process in lübeck",
+      "priority": "medium",
       "routingTarget": "agent_runtime",
       "status": "active",
-      "createdAt": "2026-03-17T20:09:23.380Z"
+      "createdAt": "2026-03-18T09:48:58.201Z"
     },
     {
-      "id": "assign-1773778157423",
-      "targetAgentId": "quarry",
-      "taskTitle": "Finish your tasks on Linear.",
-      "taskBrief": "Finish your tasks on Linear.",
+      "id": "assignment-1773827567935",
+      "targetAgentId": "polly",
+      "taskTitle": "Contact my Company",
+      "taskBrief": "Use the contactform on pixelandprocess.de and ask for help regarding a website development for an upcoming product. Think of a product of your choice.",
       "priority": "high",
       "routingTarget": "agent_runtime",
       "status": "active",
-      "createdAt": "2026-03-17T20:09:17.423Z"
-    },
-    {
-      "id": "assign-1773778137142",
-      "targetAgentId": "northstar",
-      "taskTitle": "Finish your tasks on Linear.",
-      "taskBrief": "Finish your tasks on Linear.",
-      "priority": "high",
-      "routingTarget": "agent_runtime",
-      "status": "active",
-      "createdAt": "2026-03-17T20:08:57.142Z"
-    },
-    {
-      "id": "assign-1773778114327",
-      "targetAgentId": "prism",
-      "taskTitle": "Finish your tasks on Linear.",
-      "taskBrief": "Finish your tasks on Linear.",
-      "priority": "high",
-      "routingTarget": "agent_runtime",
-      "status": "active",
-      "createdAt": "2026-03-17T20:08:34.327Z"
+      "createdAt": "2026-03-18T09:52:47.935Z"
     }
   ],
   "source": "file",
-  "lastUpdatedAt": "2026-03-17T20:09:33.000Z"
+  "lastUpdatedAt": "2026-03-18T09:52:57.680Z"
 }
