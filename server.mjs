@@ -7,7 +7,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { registerAgent, unregisterAgent, dispatchTask, cancelTask, getAllAgentStatuses, startTaskQueue, shutdownAll, setProjectRoot } from './agent-runtime.mjs'
+import { registerAgent, unregisterAgent, updateAgentRuntime, dispatchTask, cancelTask, getAllAgentStatuses, startTaskQueue, shutdownAll, setProjectRoot } from './agent-runtime.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(__dirname, 'dist')
@@ -57,6 +57,7 @@ try {
 // Wire agent runtime hooks
 apiCtx.registerAgentRuntime = (id, name, role, systemPrompt, runtimeConfig) => registerAgent(id, name, role, systemPrompt, runtimeConfig)
 apiCtx.unregisterAgentRuntime = (id) => unregisterAgent(id)
+apiCtx.updateAgentRuntime = (id, patch) => updateAgentRuntime(id, patch)
 apiCtx.getAgentRuntimeStatuses = () => getAllAgentStatuses()
 apiCtx.cancelAgentTask = (agentId) => cancelTask(agentId)
 
@@ -330,6 +331,8 @@ server.listen(PORT, '0.0.0.0', async () => {
         workingDir: agent.runtimeWorkingDir ?? undefined,
         allowedTools: agent.runtimeAllowedTools ?? undefined,
         mode: agent.runtimeMode ?? 'full',
+        provider: agent.runtimeProvider ?? 'claude-code',
+        model: agent.runtimeModel || undefined,
       })
     }
     // Re-queue stuck active assignments

@@ -77,6 +77,7 @@ export interface ApiContext {
   // Runtime hooks
   registerAgentRuntime?(id: string, name: string, role: string, systemPrompt: string, runtimeConfig?: Record<string, unknown>): void
   unregisterAgentRuntime?(id: string): void
+  updateAgentRuntime?(id: string, patch: Record<string, unknown>): void
   dispatchToRuntime?(agentId: string, assignment: Record<string, unknown>): void
   getAgentRuntimeStatuses?(): unknown[]
   cancelAgentTask?(agentId: string): string | null
@@ -115,6 +116,8 @@ export async function getSnapshot(ctx: ApiContext): Promise<ApiResponse> {
   }
 }
 
+const VALID_PROVIDERS = ['claude-code', 'openai', 'deepseek', 'mimo', 'ollama']
+
 export async function patchAgent(ctx: ApiContext, agentId: string, raw: unknown): Promise<ApiResponse> {
   if (!validateObject(raw)) return err(400, 'Body must be a JSON object')
   const patch = sanitizePatch(raw as Record<string, unknown>)
@@ -122,8 +125,23 @@ export async function patchAgent(ctx: ApiContext, agentId: string, raw: unknown)
   if ('presence' in patch && !VALID_PRESENCE.includes(patch.presence as typeof VALID_PRESENCE[number])) {
     return err(400, `Invalid presence value. Must be one of: ${VALID_PRESENCE.join(', ')}`)
   }
+  if ('runtimeProvider' in patch && !VALID_PROVIDERS.includes(String(patch.runtimeProvider))) {
+    return err(400, `Invalid provider. Must be one of: ${VALID_PROVIDERS.join(', ')}`)
+  }
   const found = await ctx.patchAgent(agentId, patch)
   if (!found) return err(404, 'Not found')
+  // Keep the live runtime in step with the stored agent, so a provider or model change applies to the next task
+  if (ctx.updateAgentRuntime) {
+    const rt: Record<string, unknown> = {}
+    if ('runtimeProvider' in patch) rt.provider = String(patch.runtimeProvider)
+    if ('runtimeModel' in patch) rt.model = String(patch.runtimeModel || '') || undefined
+    if ('runtimeMaxTurns' in patch) rt.maxTurns = patch.runtimeMaxTurns
+    if ('runtimeTimeoutSec' in patch) rt.timeoutSec = patch.runtimeTimeoutSec
+    if ('runtimeWorkingDir' in patch) rt.workingDir = patch.runtimeWorkingDir
+    if ('runtimeAllowedTools' in patch) rt.allowedTools = patch.runtimeAllowedTools
+    if ('runtimeMode' in patch) rt.mode = patch.runtimeMode
+    if (Object.keys(rt).length) ctx.updateAgentRuntime(agentId, rt)
+  }
   return ok(200, { ok: true })
 }
 
@@ -153,6 +171,9 @@ export async function createAgent(ctx: ApiContext, input: unknown): Promise<ApiR
   if (o.presence && !VALID_PRESENCE.includes(o.presence as typeof VALID_PRESENCE[number])) {
     return err(400, `Invalid presence. Must be one of: ${VALID_PRESENCE.join(', ')}`)
   }
+  if (o.runtimeProvider !== undefined && !VALID_PROVIDERS.includes(String(o.runtimeProvider))) {
+    return err(400, `Invalid provider. Must be one of: ${VALID_PROVIDERS.join(', ')}`)
+  }
   try {
     const result = await ctx.createAgent(o)
     if (ctx.registerAgentRuntime) {
@@ -162,6 +183,8 @@ export async function createAgent(ctx: ApiContext, input: unknown): Promise<ApiR
         workingDir: o.runtimeWorkingDir ?? undefined,
         allowedTools: o.runtimeAllowedTools ?? undefined,
         mode: o.runtimeMode ?? 'full',
+        provider: o.runtimeProvider ?? 'claude-code',
+        model: o.runtimeModel ? String(o.runtimeModel) : undefined,
       })
     }
     emit({ type: 'agent.created', agentId: String(o.id), name: String(o.name) })

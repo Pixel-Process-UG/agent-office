@@ -11,6 +11,10 @@ services:
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - LINEAR_API_KEY=${LINEAR_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - MIMO_API_KEY=${MIMO_API_KEY:-}
+      - OLLAMA_URL=${OLLAMA_URL:-}
     restart: unless-stopped
 
   # postgres:
