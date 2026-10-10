@@ -139,8 +139,10 @@ export function AgentForm({ agent, onClose }: { agent?: OfficeAgent; onClose: ()
         <label htmlFor="agent-provider" className="settings-label">Provider</label>
         <select id="agent-provider" name="runtimeProvider" className="assign-select" defaultValue={agent?.runtimeProvider ?? 'claude-code'}>
           <option value="claude-code">Claude Code (CLI)</option>
-          <option value="openai">OpenAI</option>
-          <option value="ollama">Ollama (local)</option>
+          <option value="deepseek">DeepSeek (API, chat only)</option>
+          <option value="mimo">Xiaomi MiMo (API, chat only)</option>
+          <option value="openai">OpenAI (API, chat only)</option>
+          <option value="ollama">Ollama (local, chat only)</option>
         </select>
 
         <label htmlFor="agent-model" className="settings-label">Model</label>

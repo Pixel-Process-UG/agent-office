@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { registerAgent, unregisterAgent, dispatchTask, cancelTask, getAllAgentStatuses, startTaskQueue, shutdownAll, setProjectRoot } from './agent-runtime.mjs'
+import { registerAgent, unregisterAgent, updateAgentRuntime, dispatchTask, cancelTask, getAllAgentStatuses, startTaskQueue, shutdownAll, setProjectRoot } from './agent-runtime.mjs'
 
 setProjectRoot(process.env.PROJECT_ROOT || __dirname)
 const STATE_DIR = process.env.OFFICE_STATE_DIR || path.resolve(__dirname, 'state')
@@ -74,6 +74,7 @@ function officeApiPlugin(): Plugin {
             // Wire agent runtime
             apiCtx.registerAgentRuntime = (id: string, name: string, role: string, sp: string, rc?: Record<string, unknown>) => registerAgent(id, name, role, sp, rc)
             apiCtx.unregisterAgentRuntime = (id: string) => unregisterAgent(id)
+            apiCtx.updateAgentRuntime = (id: string, patch: Record<string, unknown>) => updateAgentRuntime(id, patch)
             apiCtx.getAgentRuntimeStatuses = () => getAllAgentStatuses()
             apiCtx.cancelAgentTask = (agentId: string) => cancelTask(agentId)
             apiCtx.dispatchToRuntime = (agentId: string, assignment: Record<string, unknown>) => {
@@ -116,6 +117,8 @@ function officeApiPlugin(): Plugin {
                   workingDir: agent.runtimeWorkingDir ?? undefined,
                   allowedTools: agent.runtimeAllowedTools ?? undefined,
                   mode: agent.runtimeMode ?? 'full',
+                  provider: agent.runtimeProvider ?? 'claude-code',
+                  model: agent.runtimeModel || undefined,
                 })
               }
             } catch { /* empty state */ }

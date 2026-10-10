@@ -3,6 +3,7 @@
  * Shared by both vite.config.ts (dev) and server.mjs (prod).
  */
 import { spawn } from 'node:child_process'
+import { isChatProvider, complete } from './agent-providers.mjs'
 
 const CLAUDE_CMD = process.env.CLAUDE_CMD || 'claude'
 const MAX_RESULT_LEN = 2000
@@ -45,6 +46,16 @@ export function registerAgent(agentId, name, role, systemPrompt = '', runtimeCon
 }
 
 /**
+ * Merge changed runtime settings into a registered agent (called after a PATCH).
+ * @param {string} agentId
+ * @param {Record<string, unknown>} patch
+ */
+export function updateAgentRuntime(agentId, patch) {
+  const entry = registry.get(agentId)
+  if (entry) entry.runtimeConfig = { ...entry.runtimeConfig, ...patch }
+}
+
+/**
  * Unregister an agent and kill any in-flight subprocess.
  * @param {string} agentId
  */
@@ -62,7 +73,43 @@ export function unregisterAgent(agentId) {
 }
 
 /**
- * Dispatch a task to an agent via `claude -p`.
+ * Run a task through a chat-completion provider (DeepSeek, MiMo, OpenAI, Ollama).
+ * No subprocess: the reply is the result. Cancel aborts the request.
+ */
+function dispatchChat(entry, assignment, callbacks) {
+  const controller = new AbortController()
+  // cancelTask and shutdownAll call childProcess.kill(), so give them an object with kill()
+  entry.currentTask = { assignmentId: assignment.id, childProcess: { kill: () => controller.abort() } }
+
+  Promise.resolve(callbacks.onStart(assignment.id)).catch(() => {})
+
+  const system = entry.systemPrompt || `You are ${entry.name}, a ${entry.role}.`
+  const user = `Task: ${assignment.taskTitle}\n\n${assignment.taskBrief || ''}\n\nProvide your response directly.`
+
+  complete({
+    provider: entry.runtimeConfig.provider,
+    model: entry.runtimeConfig.model,
+    system,
+    user,
+    timeoutSec: entry.runtimeConfig.timeoutSec || 300,
+    signal: controller.signal,
+  }).then(
+    text => {
+      if (entry.currentTask?.assignmentId !== assignment.id) return // cancelled meanwhile
+      entry.currentTask = null
+      return callbacks.onComplete(assignment.id, text)
+    },
+    err => {
+      if (entry.currentTask?.assignmentId !== assignment.id) return
+      entry.currentTask = null
+      return callbacks.onError(assignment.id, err.message)
+    },
+  )
+  return true
+}
+
+/**
+ * Dispatch a task to an agent via `claude -p`, or via a chat provider if the agent has one.
  * @param {string} agentId
  * @param {{ id: string, taskTitle: string, taskBrief: string }} assignment
  * @param {{ onStart: (id: string) => void|Promise<void>, onComplete: (id: string, result: string) => void|Promise<void>, onError: (id: string, error: string) => void|Promise<void> }} callbacks
@@ -78,6 +125,8 @@ export function dispatchTask(agentId, assignment, callbacks) {
     console.warn(`[agent-runtime] Cannot dispatch - agent ${agentId} is busy with ${entry.currentTask.assignmentId}`)
     return false
   }
+
+  if (isChatProvider(entry.runtimeConfig.provider)) return dispatchChat(entry, assignment, callbacks)
 
   const prompt = entry.systemPrompt
     ? `${entry.systemPrompt}\n\nTask: ${assignment.taskTitle}\n\n${assignment.taskBrief || ''}\n\nProvide your response directly.`
